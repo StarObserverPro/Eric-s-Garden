@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#f5f0de" />
+  <meta name="description" content="Eric 的秘密菜园 R2 — 照料、采摘、观察和读表格。" />
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+  <link rel="manifest" href="./site.webmanifest" />
+  <link rel="stylesheet" href="./styles.css" />
+  <title>Eric 的秘密菜园 R2</title>
+</head>
+<body>
+  <div id="app" class="app-shell">
+    <header class="topbar">
+      <div class="brand-wrap">
+        <div class="brand-mark" aria-hidden="true">🌱</div>
+        <div>
+          <div class="eyebrow">ERIC'S SECRET GARDEN · R2</div>
+          <h1>Eric 的秘密菜园</h1>
+        </div>
+      </div>
+
+      <div class="top-actions">
+        <button id="speakBtn" class="icon-btn" type="button" aria-label="朗读今天的任务" title="朗读今天的任务">🔊</button>
+        <button id="statsBtn" class="pill-btn" type="button">📊 统计表</button>
+        <button id="resetBtn" class="icon-btn quiet" type="button" aria-label="重新开始" title="重新开始">↻</button>
+      </div>
+    </header>
+
+    <main class="game-layout">
+      <aside class="mission-card" aria-labelledby="missionTitle">
+        <div class="mission-topline">
+          <span id="levelBadge" class="level-badge">第 1 关</span>
+          <span id="weatherBadge" class="weather-badge">☀️ 晴朗</span>
+        </div>
+        <div class="mission-progress-row">
+          <span id="levelProgress">0 / 10</span>
+          <div class="progress-track" aria-hidden="true"><div id="progressFill" class="progress-fill"></div></div>
+        </div>
+        <p class="eyebrow mission-label">TODAY'S JOB · 今天的任务</p>
+        <h2 id="missionTitle">先把今天的种子播下去</h2>
+        <p id="missionHint" class="mission-hint">按下面的“播种 / 长大”，菜地会先自动播下这一关需要的种子。</p>
+        <div id="targetList" class="target-list" aria-label="本关目标"></div>
+        <div class="status-strip" aria-label="照料状态">
+          <span id="waterStatus">💧 浇水 0/0</span>
+          <span id="sprayStatus">🛡️ 虫害 0</span>
+          <span id="growthStatus">🌿 生长 0/4</span>
+        </div>
+      </aside>
+
+      <section class="garden-stage" aria-label="3D 菜园游戏区">
+        <canvas id="gardenCanvas" role="img" aria-label="可以旋转、缩放和点击照料的秘密菜园"></canvas>
+        <div class="stage-corner stage-corner-left">
+          <span>↔ 拖动转一转</span>
+          <span>🤏 双指缩放</span>
+        </div>
+        <div id="toast" class="toast" role="status" aria-live="polite"></div>
+      </section>
+
+      <aside class="notebook-card">
+        <div class="notebook-heading">
+          <div>
+            <p class="eyebrow">GARDEN NOTE · 菜园小本本</p>
+            <h2>今天发生了什么？</h2>
+          </div>
+          <span id="starCount" class="star-count">⭐ 0</span>
+        </div>
+        <div id="eventLog" class="event-log"></div>
+        <div class="unlock-box">
+          <span id="unlockIcon">🔒</span>
+          <div>
+            <strong id="unlockTitle">菜地成长计划</strong>
+            <p id="unlockText">再过 2 关解锁生菜</p>
+          </div>
+        </div>
+      </aside>
+    </main>
+
+    <section class="control-deck" aria-label="菜园工具">
+      <div class="tool-group" role="group" aria-label="照料工具">
+        <button class="tool-btn active" data-tool="harvest" type="button"><span>🧺</span><b>收菜</b><small>Harvest</small></button>
+        <button class="tool-btn" data-tool="water" type="button"><span>💧</span><b>浇水</b><small>Water</small></button>
+        <button class="tool-btn" data-tool="spray" type="button"><span>🧴</span><b>喷药</b><small>Protect</small></button>
+      </div>
+      <button id="growBtn" class="grow-btn" type="button">
+        <span id="growIcon">🌱</span>
+        <span>
+          <b id="growLabel">播种</b>
+          <small id="growSubLabel">按一下开始今天的菜园</small>
+        </span>
+      </button>
+    </section>
+  </div>
+
+  <dialog id="statsDialog" class="dialog-card">
+    <form method="dialog" class="dialog-shell">
+      <div class="dialog-head">
+        <div>
+          <p class="eyebrow">HARVEST RECORD</p>
+          <h2>我的蔬菜统计表</h2>
+        </div>
+        <button class="icon-btn" value="close" aria-label="关闭统计表">×</button>
+      </div>
+      <div id="statsSummary" class="stats-summary"></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>蔬菜</th><th>已摘</th><th>本关目标</th><th>还差</th></tr></thead>
+          <tbody id="statsBody"></tbody>
+          <tfoot id="statsFoot"></tfoot>
+        </table>
+      </div>
+      <button id="questionBtn" class="secondary-btn" type="button">💡 看表格想一想</button>
+      <div id="questionBox" class="question-box" hidden></div>
+    </form>
+  </dialog>
+
+  <dialog id="levelDialog" class="dialog-card celebration-dialog">
+    <form method="dialog" class="dialog-shell">
+      <div class="celebration-icon">🌟</div>
+      <p class="eyebrow">LEVEL COMPLETE</p>
+      <h2 id="completeTitle">这一篮收好啦！</h2>
+      <p id="completeText">你完成了今天的菜园任务。</p>
+      <div id="levelReward" class="reward-row"></div>
+      <div id="levelQuestion" class="level-question"></div>
+      <button id="nextLevelBtn" class="primary-btn" type="button">下一关 →</button>
+    </form>
+  </dialog>
+
+  <script src="./app.js"></script>
+</body>
+</html>
