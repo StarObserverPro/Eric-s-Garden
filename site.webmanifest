@@ -1,0 +1,9 @@
+{
+  "name": "Eric 的秘密菜园 R2",
+  "short_name": "秘密菜园",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f7f2df",
+  "theme_color": "#f5f0de",
+  "icons": []
+}
