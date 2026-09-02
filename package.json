@@ -1,0 +1,10 @@
+{
+  "name": "eric-secret-garden-r2",
+  "version": "2.0.0",
+  "private": true,
+  "description": "A tiny, dependency-free garden game for Eric.",
+  "scripts": {
+    "dev": "python3 -m http.server 4173",
+    "check": "node --check app.js"
+  }
+}
