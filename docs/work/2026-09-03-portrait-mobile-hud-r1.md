@@ -3,6 +3,11 @@
 Status: executing
 Base main SHA: 44739d238f02335a04bee44399b1a34821eea545
 
+## Authority
+- Current explicit user input is authoritative for this execution route.
+- `docs/UI_HUD_PORTRAIT_MOBILE_R1.md` is the baseline where the user has not supplied a more specific current instruction.
+- Legacy implementation, compatibility CSS, and older layout assumptions must yield when they conflict with explicit current input; they may be preserved only outside the affected portrait surface.
+
 ## Objective
 Turn the portrait-phone layout into a garden-first overlay HUD that follows `docs/UI_HUD_PORTRAIT_MOBILE_R1.md` without changing game or renderer semantics.
 
@@ -25,10 +30,12 @@ Turn the portrait-phone layout into a garden-first overlay HUD that follows `doc
 - Architecture boundary touched: no.
 
 ## Current state
-- Completed: none.
-- Current step: implement the portrait DOM adaptation and responsive overlay system against fresh main.
-- Next action: add the portrait UI module/CSS, wire it from `index.html`, then run focused browser and repository checks.
+- Completed: portrait DOM adaptation, overlay structure, strict-TypeScript cleanup, legacy `pill-btn` notebook-icon conflict isolation, explicit 44 px top action targets.
+- Current step: validate the repaired PR head in repository Verify and inspect portrait interaction behavior.
+- Next action: consume the new Verify result, fix any remaining concrete failure, then update PR evidence/readiness.
 - Blocker: none.
 
 ## Evidence
-- Pending: portrait browser/touch interaction capture and final-head `npm run check` / hosted Verify.
+- Previous Verify run `33769537414`: shader validation passed; 14 test files / 31 tests passed; build failed only on strict indexed-access errors at `src/ui/portrait-mobile.ts` lines 167 and 170.
+- Repair commit `c08d6a315428a17058a789ad9e6100e16e1244c2`: removes unsafe indexed calls, prevents legacy `.pill-btn::after` from replacing the explicit notebook icon, and makes the two top interactive controls at least 44 px.
+- Pending: repaired-head hosted Verify and portrait browser/touch interaction capture.
