@@ -39,8 +39,8 @@ export class FrameCadenceSampler {
   record(timeMs: number): void {
     if (this.#previousFrameAt !== undefined) {
       const interval = timeMs - this.#previousFrameAt;
-      if (Number.isFinite(interval) && interval >= 1 && interval <= MAX_CADENCE_SAMPLE_MS) {
-        this.#intervals.push(interval);
+      if (Number.isFinite(interval) && interval >= 1) {
+        this.#intervals.push(Math.min(interval, MAX_CADENCE_SAMPLE_MS));
       }
     }
     this.#previousFrameAt = timeMs;
@@ -139,15 +139,6 @@ export function qualityProfileFor(
     vegetationInstances: INSTANCE_TIERS[tierIndex]!,
     pressure: normalized,
   };
-}
-
-export function sameQualityProfile(
-  left: RuntimeQualityProfile,
-  right: RuntimeQualityProfile,
-): boolean {
-  return left.level === right.level
-    && left.vegetationInstances === right.vegetationInstances
-    && Math.abs(left.pressure - right.pressure) < 0.0001;
 }
 
 function percentile(sorted: readonly number[], fraction: number): number {
