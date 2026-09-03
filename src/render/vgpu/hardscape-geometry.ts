@@ -2,7 +2,7 @@ export const HARDSCAPE_VERTEX_STRIDE_FLOATS = 9;
 export const HARDSCAPE_STONE_COUNT = 28;
 export const HARDSCAPE_FENCE_POST_COUNT = 24;
 export const HARDSCAPE_FENCE_RAIL_SEGMENT_COUNT = 16;
-export const TERRAIN_OUTER_Y = -0.39;
+export const TERRAIN_OUTER_Y = -0.378;
 export const TERRAIN_INNER_Y = -0.205;
 
 const TERRAIN_MIN_X = -5.70;
