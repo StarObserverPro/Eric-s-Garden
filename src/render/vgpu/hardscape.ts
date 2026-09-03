@@ -56,14 +56,14 @@ export async function createHardscapeLayer(
       cull: "none",
       label: "garden-hardscape",
     });
-    hardscape.set(uniforms);
+    setHardscapeUniforms(hardscape, uniforms);
     await hardscape.compile(target);
 
     return {
       draw: hardscape,
       triangleCount: data.stats.triangleCount,
       set(values: HardscapeUniforms): void {
-        hardscape.set(values);
+        setHardscapeUniforms(hardscape, values);
       },
       destroy(): void {
         hardscapeGeometry?.destroy();
@@ -73,4 +73,17 @@ export async function createHardscapeLayer(
     hardscapeGeometry?.destroy();
     throw error;
   }
+}
+
+function setHardscapeUniforms(drawable: Draw, values: HardscapeUniforms): void {
+  drawable.set({
+    viewProjection: values.viewProjection,
+    cameraPosition: values.cameraPosition,
+    scene: values.scene,
+    lightDirection: values.lightDirection,
+    lightColor: values.lightColor,
+    ambientColor: values.ambientColor,
+    fogColor: values.fogColor,
+    lightParams: values.lightParams,
+  });
 }
