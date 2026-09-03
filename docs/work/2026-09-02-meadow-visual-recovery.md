@@ -1,7 +1,9 @@
 # Meadow visual recovery
 
-Status: executing
+Status: implementation complete; awaiting real-WebGPU visual review
 Base main SHA: e8f1496d49acd55c6dd704c8ce957f5e703fcf67
+PR: #5
+Verified head: 2465fc99be1185907e2143f44e492660f25b9a31
 
 ## Objective
 Recover the strongest sky light, grass motion/density, and atmospheric color ideas from the supplied wind-meadow source into Eric's Garden's existing vgpu Phase 2 scene without importing its Three.js/WebGL runtime.
@@ -22,12 +24,21 @@ Recover the strongest sky light, grass motion/density, and atmospheric color ide
 - Paths: `src/scene/snapshot.ts`, `src/render/vgpu/geometry.ts`, `src/render/vgpu/vgpu-renderer.ts`, `src/render/vgpu/shaders/*.wgsl`, focused tests, `package.json` shader validation list.
 - Architecture boundary touched: no — one existing vgpu renderer, frame owner, scene snapshot and WebGPU context remain authoritative.
 
-## Current state
-- Completed: source/demo audit and architecture mapping.
-- Current step: port the useful visual mechanisms into the existing vgpu owners.
-- Next action: run hosted verification on the exact PR head and fix any WGSL/type/test failures.
-- Blocker: no representative real-WebGPU browser capture is available through the current connected execution path.
+## Result
+- Grass: segmented four-leaf tufts, canopy/understory variation, sparse flowers, coherent gust bands, eddies, cantilever-style bend profile, flutter, root occlusion and back-light response.
+- Sky/light: camera-orbit-consistent sun ray, horizon/twilight glow, lightweight Rayleigh/Mie-style terms, cloud field, warm direct light + cool ambient light, shared cloud shadow and exponential fog.
+- Ground: richer turf mottling/thatch; existing procedural soil now receives the same sky light while retaining wetness/material behavior.
+- Tone: restrained weather-aware exposure/saturation/contrast/vignette shaping rather than a separate demo filter stack.
+- Deliberately omitted: foreign Three.js/WebGL runtime, second scene graph/frame loop, season/time UI/state and standalone terrain world.
 
-## Evidence
-- Supplied external source reviewed locally; Three.js/WebGL shell explicitly excluded.
-- Hosted `Verify` on final PR head will be the integration check; WebGPU visual remains a separate claim.
+## Verification
+- Hosted `Verify` run #20 on head `2465fc99be1185907e2143f44e492660f25b9a31`: success.
+- Pinned portable CPU renderer health check: success.
+- All WGSL validation including the new vegetation shader: success.
+- Model/mock/Node tests and production TypeScript/Vite build: success.
+- Deterministic soil render evidence: success.
+- Playable Canvas fallback capture: success.
+- One native WGSL issue was found and repaired during verification: Naga correctly rejected compound assignment to an `xz` swizzle; the shader now accumulates horizontal displacement through whole `vec3` values.
+
+## Remaining visual claim
+No representative real-browser WebGPU capture is available through the current connected verification path. Therefore the integration is complete and verified, but final aesthetic claims about grass density, sun placement and color balance remain pending a real-WebGPU visual review. Do not infer those claims from the Canvas fallback or CPU/mock evidence.
