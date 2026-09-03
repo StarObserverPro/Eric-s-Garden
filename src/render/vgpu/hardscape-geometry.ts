@@ -1,16 +1,14 @@
-import { PLOT_POSITIONS } from "../../scene/snapshot";
-
 export const HARDSCAPE_VERTEX_STRIDE_FLOATS = 9;
 export const HARDSCAPE_STONE_COUNT = 28;
 export const HARDSCAPE_FENCE_POST_COUNT = 24;
 export const HARDSCAPE_FENCE_RAIL_SEGMENT_COUNT = 16;
+export const TERRAIN_OUTER_Y = -0.39;
+export const TERRAIN_INNER_Y = -0.205;
 
-const GAP_MIN_X = -3.22;
-const GAP_MAX_X = 3.22;
-const GAP_MIN_Z = -2.50;
-const GAP_MAX_Z = 2.50;
-const GAP_STEP = 0.12;
-const BED_CLEARANCE = 0.69;
+const TERRAIN_MIN_X = -5.70;
+const TERRAIN_MAX_X = 5.70;
+const TERRAIN_MIN_Z = -4.30;
+const TERRAIN_MAX_Z = 4.30;
 const STONE_SEGMENTS = 8;
 const POST_SEGMENTS = 6;
 const RAIL_SEGMENTS = 6;
@@ -18,6 +16,8 @@ const RAIL_SEGMENTS = 6;
 type Vec3 = readonly [number, number, number];
 
 export interface HardscapeGeometryStats {
+  readonly terrainTriangles: number;
+  /** Compatibility alias retained for older diagnostics/tests. */
   readonly gapTriangles: number;
   readonly stoneCount: number;
   readonly stoneTriangles: number;
@@ -35,16 +35,17 @@ export interface HardscapeGeometryData {
 
 export function createHardscapeGeometryData(): HardscapeGeometryData {
   const output: number[] = [];
-  const gapTriangles = appendGapSurface(output);
+  const terrainTriangles = appendTerrainSurface(output);
   const stoneTriangles = appendStones(output);
   const fenceTriangles = appendFence(output);
-  const triangleCount = gapTriangles + stoneTriangles + fenceTriangles;
+  const triangleCount = terrainTriangles + stoneTriangles + fenceTriangles;
   const data = new Float32Array(output) as Float32Array<ArrayBuffer>;
 
   return {
     data,
     stats: {
-      gapTriangles,
+      terrainTriangles,
+      gapTriangles: terrainTriangles,
       stoneCount: HARDSCAPE_STONE_COUNT,
       stoneTriangles,
       fencePostCount: HARDSCAPE_FENCE_POST_COUNT,
@@ -56,30 +57,34 @@ export function createHardscapeGeometryData(): HardscapeGeometryData {
   };
 }
 
-function appendGapSurface(output: number[]): number {
-  const xCells = Math.ceil((GAP_MAX_X - GAP_MIN_X) / GAP_STEP);
-  const zCells = Math.ceil((GAP_MAX_Z - GAP_MIN_Z) / GAP_STEP);
+function appendTerrainSurface(output: number[]): number {
+  const xs = terrainAxis(TERRAIN_MIN_X, [
+    [-4.10, 0.46],
+    [-3.25, 0.28],
+    [3.25, 0.16],
+    [4.10, 0.28],
+    [TERRAIN_MAX_X, 0.46],
+  ]);
+  const zs = terrainAxis(TERRAIN_MIN_Z, [
+    [-3.25, 0.46],
+    [-2.55, 0.28],
+    [2.55, 0.16],
+    [3.25, 0.28],
+    [TERRAIN_MAX_Z, 0.46],
+  ]);
   let triangles = 0;
 
-  for (let zIndex = 0; zIndex < zCells; zIndex += 1) {
-    const z0 = GAP_MIN_Z + zIndex * GAP_STEP;
-    const z1 = Math.min(GAP_MAX_Z, z0 + GAP_STEP);
-    for (let xIndex = 0; xIndex < xCells; xIndex += 1) {
-      const x0 = GAP_MIN_X + xIndex * GAP_STEP;
-      const x1 = Math.min(GAP_MAX_X, x0 + GAP_STEP);
-      const corners: readonly [number, number][] = [
-        [x0, z0],
-        [x1, z0],
-        [x1, z1],
-        [x0, z1],
-      ];
-      if (corners.some(([x, z]) => insideBed(x, z))) continue;
-
-      const a: Vec3 = [x0, gapHeight(x0, z0), z0];
-      const b: Vec3 = [x1, gapHeight(x1, z0), z0];
-      const c: Vec3 = [x1, gapHeight(x1, z1), z1];
-      const d: Vec3 = [x0, gapHeight(x0, z1), z1];
-      const seed = hash2((x0 + x1) * 7.1, (z0 + z1) * 9.7);
+  for (let zIndex = 0; zIndex < zs.length - 1; zIndex += 1) {
+    const z0 = zs[zIndex]!;
+    const z1 = zs[zIndex + 1]!;
+    for (let xIndex = 0; xIndex < xs.length - 1; xIndex += 1) {
+      const x0 = xs[xIndex]!;
+      const x1 = xs[xIndex + 1]!;
+      const a: Vec3 = [x0, terrainHeightAt(x0, z0), z0];
+      const b: Vec3 = [x1, terrainHeightAt(x1, z0), z0];
+      const c: Vec3 = [x1, terrainHeightAt(x1, z1), z1];
+      const d: Vec3 = [x0, terrainHeightAt(x0, z1), z1];
+      const seed = hash2((x0 + x1) * 3.7, (z0 + z1) * 5.9);
       pushFlatTriangle(output, a, c, b, 0, seed, 0);
       pushFlatTriangle(output, a, d, c, 0, seed, 0);
       triangles += 2;
@@ -87,6 +92,39 @@ function appendGapSurface(output: number[]): number {
   }
 
   return triangles;
+}
+
+function terrainAxis(
+  start: number,
+  segments: readonly (readonly [end: number, step: number])[],
+): number[] {
+  const values = [start];
+  let current = start;
+  for (const [end, step] of segments) {
+    while (current + step < end - 1e-6) {
+      current += step;
+      values.push(current);
+    }
+    if (Math.abs(current - end) > 1e-6) {
+      current = end;
+      values.push(current);
+    }
+  }
+  return values;
+}
+
+export function terrainHeightAt(x: number, z: number): number {
+  const dx = Math.max(0, Math.abs(x) - 3.20);
+  const dz = Math.max(0, Math.abs(z) - 2.55);
+  const outsideBedField = Math.hypot(dx, dz);
+  const innerInfluence = 1 - smoothstep(0.05, 1.35, outsideBedField);
+  const broad = valueNoise2(x * 0.55, z * 0.55) - 0.5;
+  const fine = valueNoise2(x * 1.9 + 6.4, z * 1.9 - 3.8) - 0.5;
+  const broadAmplitude = lerp(0.036, 0.016, innerInfluence);
+  const fineAmplitude = lerp(0.008, 0.012, innerInfluence);
+  return lerp(TERRAIN_OUTER_Y, TERRAIN_INNER_Y, innerInfluence)
+    + broad * broadAmplitude
+    + fine * fineAmplitude;
 }
 
 function appendStones(output: number[]): number {
@@ -277,11 +315,15 @@ function stoneCenter(index: number, rng: () => number): Vec3 {
   if (index < 18) {
     const row = Math.floor(index / 2);
     const side = index % 2;
-    const x = side === 0 ? -3.42 : 3.42;
-    return [x + (rng() - 0.5) * 0.08, -0.392, -2.9 + row * 0.72 + (rng() - 0.5) * 0.08];
+    const baseX = side === 0 ? -3.92 : 3.92;
+    const x = baseX + (rng() - 0.5) * 0.10;
+    const z = -2.98 + row * 0.75 + (rng() - 0.5) * 0.10;
+    return [x, terrainHeightAt(x, z) + 0.004, z];
   }
   const column = index - 18;
-  return [-3.15 + column * 0.7 + (rng() - 0.5) * 0.07, -0.392, 2.85 + (rng() - 0.5) * 0.07];
+  const x = -3.34 + column * 0.74 + (rng() - 0.5) * 0.08;
+  const z = 3.10 + (rng() - 0.5) * 0.08;
+  return [x, terrainHeightAt(x, z) + 0.004, z];
 }
 
 function fencePostPositions(): Vec3[] {
@@ -296,18 +338,6 @@ function fencePostPositions(): Vec3[] {
     throw new Error(`Unexpected fence post count: ${positions.length}`);
   }
   return positions;
-}
-
-function insideBed(x: number, z: number): boolean {
-  return PLOT_POSITIONS.some(([plotX, , plotZ]) => (
-    Math.abs(x - plotX) < BED_CLEARANCE && Math.abs(z - plotZ) < BED_CLEARANCE
-  ));
-}
-
-function gapHeight(x: number, z: number): number {
-  const broad = (hash2(Math.floor(x * 4), Math.floor(z * 4)) - 0.5) * 0.012;
-  const fine = (hash2(Math.round(x * 17), Math.round(z * 17)) - 0.5) * 0.009;
-  return -0.397 + broad + fine;
 }
 
 function pushFlatTriangle(
@@ -341,6 +371,18 @@ function pushVertex(
   );
 }
 
+function valueNoise2(x: number, z: number): number {
+  const x0 = Math.floor(x);
+  const z0 = Math.floor(z);
+  const tx = smooth01(x - x0);
+  const tz = smooth01(z - z0);
+  const a = hash2(x0, z0);
+  const b = hash2(x0 + 1, z0);
+  const c = hash2(x0, z0 + 1);
+  const d = hash2(x0 + 1, z0 + 1);
+  return lerp(lerp(a, b, tx), lerp(c, d, tx), tz);
+}
+
 function subtract(a: Vec3, b: Vec3): Vec3 {
   return [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 }
@@ -362,6 +404,19 @@ function normalize(value: Vec3): Vec3 {
 function hash2(x: number, z: number): number {
   const sine = Math.sin(x * 127.1 + z * 311.7) * 43758.5453;
   return sine - Math.floor(sine);
+}
+
+function smooth01(value: number): number {
+  return value * value * (3 - 2 * value);
+}
+
+function smoothstep(edge0: number, edge1: number, value: number): number {
+  const t = Math.max(0, Math.min(1, (value - edge0) / (edge1 - edge0)));
+  return smooth01(t);
+}
+
+function lerp(a: number, b: number, t: number): number {
+  return a + (b - a) * t;
 }
 
 function mulberry32(seed: number): () => number {
