@@ -268,33 +268,33 @@ function appendCorn(output: number[]): number {
 function appendPumpkin(output: number[]): number {
   const crop = CROP_KIND.pumpkin;
   let triangles = 0;
-  const root: Vec3 = [0, 0.025, 0];
+  const root: Vec3 = [0, 0.038, 0];
   const vinePoints: Vec3[] = [
     root,
-    [0.28, 0.040, 0.03],
-    [0.58, 0.035, -0.08],
-    [0.86, 0.045, 0.04],
-    [1.14, 0.035, 0.13],
+    [0.28, 0.058, 0.03],
+    [0.58, 0.052, -0.08],
+    [0.86, 0.062, 0.04],
+    [1.14, 0.052, 0.13],
   ];
   for (let index = 0; index < vinePoints.length - 1; index += 1) {
-    triangles += appendCylinderBetween(output, vinePoints[index]!, vinePoints[index + 1]!, 0.018, 7, crop, MATERIAL_STEM, index < 2 ? 0 : 0.26 + index * 0.08, 0.44, vinePoints[index]!);
+    triangles += appendCylinderBetween(output, vinePoints[index]!, vinePoints[index + 1]!, 0.021, 7, crop, MATERIAL_STEM, index < 2 ? 0 : 0.26 + index * 0.08, 0.44, vinePoints[index]!);
   }
 
   const leafAnchors: readonly (readonly [Vec3, number, number])[] = [
-    [[0.02, 0.03, 0.02], -0.6, 0.00],
-    [[0.18, 0.04, -0.05], 1.15, 0.00],
-    [[0.34, 0.04, 0.04], -1.00, 0.20],
-    [[0.51, 0.04, -0.05], 0.72, 0.28],
-    [[0.67, 0.04, 0.00], -1.10, 0.36],
-    [[0.82, 0.04, 0.05], 0.94, 0.48],
-    [[0.98, 0.04, 0.08], -0.78, 0.58],
-    [[1.12, 0.04, 0.12], 0.62, 0.68],
+    [[0.02, 0.045, 0.02], -0.6, 0.00],
+    [[0.18, 0.055, -0.05], 1.15, 0.00],
+    [[0.34, 0.055, 0.04], -1.00, 0.20],
+    [[0.51, 0.052, -0.05], 0.72, 0.28],
+    [[0.67, 0.055, 0.00], -1.10, 0.36],
+    [[0.82, 0.060, 0.05], 0.94, 0.48],
+    [[0.98, 0.055, 0.08], -0.78, 0.58],
+    [[1.12, 0.052, 0.12], 0.62, 0.68],
   ];
   for (let index = 0; index < leafAnchors.length; index += 1) {
     const [anchor, side, birth] = leafAnchors[index]!;
     const petioleEnd: Vec3 = [
       anchor[0] + Math.cos(side) * 0.20,
-      0.17 + (index % 3) * 0.018,
+      0.20 + (index % 3) * 0.022,
       anchor[2] + Math.sin(side) * 0.20,
     ];
     const leafRadius = index === leafAnchors.length - 1 ? 0.20 : 0.23 + (index % 2) * 0.025;
@@ -482,22 +482,47 @@ function appendOvalLeaf(
 ): number {
   const forward: Vec3 = normalize3([Math.cos(yaw) * Math.cos(tilt), Math.sin(tilt), Math.sin(yaw) * Math.cos(tilt)]);
   const side: Vec3 = [-Math.sin(yaw), 0, Math.cos(yaw)];
-  let normal = normalize3(cross3(side, forward));
-  if (normal[1] < 0) normal = scale3(normal, -1);
-  const outline: Vec3[] = [];
-  for (let index = 0; index < segments; index += 1) {
-    const angle = index / segments * Math.PI * 2;
-    const serration = 0.94 + 0.06 * Math.cos(angle * 5);
-    outline.push(add3(center, add3(
-      scale3(side, Math.cos(angle) * width * serration),
-      scale3(forward, Math.sin(angle) * length * 0.5 * serration),
-    )));
+  let surfaceNormal = normalize3(cross3(side, forward));
+  if (surfaceNormal[1] < 0) surfaceNormal = scale3(surfaceNormal, -1);
+
+  // Build the leaflet as two half-surfaces around a shallow raised midrib.
+  // This avoids the old single-center triangle fan and gives lighting a real bilateral fold.
+  const sections = Math.max(3, Math.round(segments / 3));
+  const left: Vec3[] = [];
+  const mid: Vec3[] = [];
+  const right: Vec3[] = [];
+  const leftNormals: Vec3[] = [];
+  const midNormals: Vec3[] = [];
+  const rightNormals: Vec3[] = [];
+
+  for (let index = 0; index <= sections; index += 1) {
+    const t = index / sections;
+    const profile = Math.pow(Math.sin(t * Math.PI), 0.78);
+    const serration = 0.95 + 0.05 * Math.cos(t * Math.PI * 6);
+    const halfWidth = width * (0.045 + profile * 0.955) * serration;
+    const along = (t - 0.5) * length;
+    const arch = Math.sin(t * Math.PI) * length * 0.018;
+    const centerLine = add3(center, add3(scale3(forward, along), scale3(surfaceNormal, arch)));
+    const ridge = halfWidth * (0.13 + profile * 0.05);
+
+    left.push(add3(centerLine, scale3(side, halfWidth)));
+    mid.push(add3(centerLine, scale3(surfaceNormal, ridge)));
+    right.push(add3(centerLine, scale3(side, -halfWidth)));
+
+    const fold = 0.16 + profile * 0.12;
+    leftNormals.push(normalize3(add3(surfaceNormal, scale3(side, fold))));
+    midNormals.push(surfaceNormal);
+    rightNormals.push(normalize3(add3(surfaceNormal, scale3(side, -fold))));
   }
-  for (let index = 0; index < segments; index += 1) {
-    const next = (index + 1) % segments;
-    pushTriangle(output, center, outline[index]!, outline[next]!, normal, normal, normal, anchor, cropKind, MATERIAL_FOLIAGE, birth, flex);
+
+  for (let index = 0; index < sections; index += 1) {
+    const next = index + 1;
+    pushTriangle(output, left[index]!, mid[index]!, mid[next]!, leftNormals[index]!, midNormals[index]!, midNormals[next]!, anchor, cropKind, MATERIAL_FOLIAGE, birth, flex);
+    pushTriangle(output, left[index]!, mid[next]!, left[next]!, leftNormals[index]!, midNormals[next]!, leftNormals[next]!, anchor, cropKind, MATERIAL_FOLIAGE, birth, flex);
+    pushTriangle(output, mid[index]!, right[index]!, right[next]!, midNormals[index]!, rightNormals[index]!, rightNormals[next]!, anchor, cropKind, MATERIAL_FOLIAGE, birth, flex);
+    pushTriangle(output, mid[index]!, right[next]!, mid[next]!, midNormals[index]!, rightNormals[next]!, midNormals[next]!, anchor, cropKind, MATERIAL_FOLIAGE, birth, flex);
   }
-  return segments;
+  return sections * 4;
 }
 
 function appendPalmateLeaf(
@@ -511,23 +536,45 @@ function appendPalmateLeaf(
   flex: number,
   anchor: Vec3,
 ): number {
-  const outline: Vec3[] = [];
+  // A small hub ring distributes the palmate topology before it reaches the lobed outline.
+  // The old leaf sent every triangle into one central pole, which read as a dark starburst.
+  const hubCenter: Vec3 = [center[0], center[1] + radius * 0.045, center[2]];
+  const inner: Vec3[] = [];
+  const outer: Vec3[] = [];
+  const innerNormals: Vec3[] = [];
+  const outerNormals: Vec3[] = [];
+
   for (let index = 0; index < segments; index += 1) {
     const angle = yaw + index / segments * Math.PI * 2;
-    const lobe = index % 2 === 0 ? 1 : 0.63;
-    const r = radius * lobe * (0.96 + 0.04 * Math.cos(index * 1.7));
-    outline.push([
-      center[0] + Math.cos(angle) * r,
-      center[1] + 0.018 * Math.cos(angle * 2.2),
-      center[2] + Math.sin(angle) * r,
+    const radial: Vec3 = [Math.cos(angle), 0, Math.sin(angle)];
+    const lobe = index % 2 === 0 ? 1 : 0.70;
+    const outerRadius = radius * lobe * (0.97 + 0.03 * Math.cos(index * 1.7));
+    const innerRadius = radius * (0.27 + (index % 2) * 0.025);
+    const innerLift = radius * (0.055 + 0.018 * Math.cos(angle * 2.0 - yaw));
+    const outerLift = radius * (-0.018 + 0.050 * Math.cos(angle * 2.2 - yaw * 0.4));
+
+    inner.push([
+      center[0] + radial[0] * innerRadius,
+      center[1] + innerLift,
+      center[2] + radial[2] * innerRadius,
     ]);
+    outer.push([
+      center[0] + radial[0] * outerRadius,
+      center[1] + outerLift,
+      center[2] + radial[2] * outerRadius,
+    ]);
+    innerNormals.push(normalize3([radial[0] * 0.07, 1, radial[2] * 0.07]));
+    outerNormals.push(normalize3([radial[0] * 0.20, 1, radial[2] * 0.20]));
   }
-  const normal: Vec3 = [0, 1, 0];
+
+  const centerNormal: Vec3 = [0, 1, 0];
   for (let index = 0; index < segments; index += 1) {
     const next = (index + 1) % segments;
-    pushTriangle(output, center, outline[index]!, outline[next]!, normal, normal, normal, anchor, cropKind, MATERIAL_FOLIAGE, birth, flex);
+    pushTriangle(output, hubCenter, inner[index]!, inner[next]!, centerNormal, innerNormals[index]!, innerNormals[next]!, anchor, cropKind, MATERIAL_FOLIAGE, birth, flex);
+    pushTriangle(output, inner[index]!, outer[index]!, outer[next]!, innerNormals[index]!, outerNormals[index]!, outerNormals[next]!, anchor, cropKind, MATERIAL_FOLIAGE, birth, flex);
+    pushTriangle(output, inner[index]!, outer[next]!, inner[next]!, innerNormals[index]!, outerNormals[next]!, innerNormals[next]!, anchor, cropKind, MATERIAL_FOLIAGE, birth, flex);
   }
-  return segments;
+  return segments * 3;
 }
 
 function appendEllipsoid(
