@@ -608,7 +608,7 @@ async function createGeneration(
       crop.compile(sceneTarget),
       vegetation.compile(sceneTarget),
       sky.compile(sceneTarget),
-      blit.compile(output),
+      blit.compile({ colors: [output.format] }),
     ]);
 
     const staticBundle = bundle(
