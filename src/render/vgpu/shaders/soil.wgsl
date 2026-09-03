@@ -101,31 +101,31 @@ fn fs_main(input: VertexOut) -> @location(0) vec4f {
   let grain = hash21(floor(input.world.xz * 46.0) + seed * 29.0);
   let mineral = hash21(floor(input.world.xz * 23.0 + vec2f(4.3, -7.8)) + seed * 41.0);
 
-  let dark_earth = vec3f(0.16, 0.095, 0.052);
-  let loam = vec3f(0.31, 0.185, 0.092);
-  let warm_crumb = vec3f(0.41, 0.255, 0.125);
-  var base = mix(dark_earth, loam, 0.28 + coarse * 0.58);
-  base = mix(base, warm_crumb, medium * 0.28);
-  base *= 0.88 + grain * 0.18;
+  let dark_earth = vec3f(0.22, 0.125, 0.060);
+  let loam = vec3f(0.39, 0.235, 0.112);
+  let warm_crumb = vec3f(0.52, 0.325, 0.165);
+  var base = mix(dark_earth, loam, 0.32 + coarse * 0.54);
+  base = mix(base, warm_crumb, medium * 0.30);
+  base *= 0.94 + grain * 0.16;
 
   let is_skirt = surface_type > 0.5 && surface_type < 1.5;
   let is_clod = surface_type > 1.5;
   let is_pebble = is_clod && seed > 0.91;
   if (is_skirt) {
-    base *= 0.88;
-    normal = normalize(mix(normal, vec3f(normal.x, normal.y * 0.65, normal.z), 0.22));
+    base *= 0.94;
+    normal = normalize(mix(normal, vec3f(normal.x, normal.y * 0.65, normal.z), 0.16));
   }
   if (is_clod) {
-    base *= mix(0.9, 1.08, seed);
+    base *= mix(0.94, 1.08, seed);
   }
   if (is_pebble) {
-    let stone = mix(vec3f(0.24, 0.23, 0.20), vec3f(0.47, 0.42, 0.33), mineral);
-    base = mix(base, stone, 0.82);
+    let stone = mix(vec3f(0.27, 0.26, 0.22), vec3f(0.51, 0.45, 0.35), mineral);
+    base = mix(base, stone, 0.80);
   } else if (mineral > 0.972 && !is_skirt) {
-    base = mix(base, vec3f(0.48, 0.39, 0.24), 0.22);
+    base = mix(base, vec3f(0.53, 0.43, 0.26), 0.22);
   }
 
-  base = mix(base, base * vec3f(0.64, 0.67, 0.68), moisture * 0.34);
+  base = mix(base, base * vec3f(0.66, 0.69, 0.70), moisture * 0.34);
 
   let light_direction = normalize(uniforms.lightDirection.xyz);
   let view_direction = normalize(uniforms.cameraPosition.xyz - input.world);
@@ -142,15 +142,16 @@ fn fs_main(input: VertexOut) -> @location(0) vec4f {
   let specular = pow(n_dot_h, specular_power) * specular_strength * mix(0.55, 1.0, fresnel);
 
   let upward = clamp(normal.y * 0.5 + 0.5, 0.0, 1.0);
-  let ground_bounce = vec3f(0.18, 0.12, 0.08) * (1.0 - upward) * 0.18;
-  let ambient = uniforms.ambientColor.rgb * (0.54 + upward * 0.28) + ground_bounce;
+  let wrapped = clamp((n_dot_l + 0.18) / 1.18, 0.0, 1.0);
+  let ground_bounce = vec3f(0.20, 0.135, 0.085) * (1.0 - upward) * 0.16;
+  let ambient = uniforms.ambientColor.rgb * (0.60 + upward * 0.28) + ground_bounce;
   let direct = uniforms.lightColor.rgb * uniforms.lightParams.x;
   let shadow = cloud_shadow(input.world);
-  var color = base * (ambient + direct * n_dot_l * 0.78) * shadow;
+  var color = base * (ambient + direct * (0.12 + wrapped * 0.76)) * shadow;
   color += direct * specular * shadow;
 
   if (is_clod && !is_pebble) {
-    color *= 0.94 + n_dot_l * 0.10;
+    color *= 0.97 + wrapped * 0.07;
   }
 
   let rain = uniforms.lightParams.z;
