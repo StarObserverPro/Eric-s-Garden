@@ -2,7 +2,7 @@
 
 GitHub `main` is the source of truth. Deployed sites are distribution targets and runtime evidence, not authoring or recovery sources while GitHub is available.
 
-This file is a **lightweight bootloader**. It routes the施工现场 to the smallest useful context and protects a few real architecture boundaries; it does not copy Crystal Garden's full governance system.
+这是一份**轻量 bootloader**：只把后续施工现场引到当前真正需要的上下文，并保护少数真实的架构边界；它不复制 Crystal Garden 的完整治理系统。
 
 ## 1. Read only the current task
 
