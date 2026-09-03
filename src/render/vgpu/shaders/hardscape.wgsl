@@ -37,6 +37,19 @@ fn cloud_shadow(world: vec3f) -> f32 {
   return 1.0 - uniforms.scene.z * mask * 0.26;
 }
 
+fn nearest_bed_edge_distance(world_xz: vec2f) -> f32 {
+  var closest = 100.0;
+  for (var index = 0u; index < 12u; index += 1u) {
+    let column = f32(index % 4u) - 1.5;
+    let row = f32(index / 4u) - 1.0;
+    let center = vec2f(column * 1.65, row * 1.75);
+    let from_box = abs(world_xz - center) - vec2f(0.70);
+    let outside = length(max(from_box, vec2f(0.0)));
+    closest = min(closest, outside);
+  }
+  return closest;
+}
+
 @vertex
 fn vs_main(input: VertexIn) -> VertexOut {
   var output: VertexOut;
@@ -56,16 +69,29 @@ fn fs_main(input: VertexOut) -> @location(0) vec4f {
   var base = vec3f(0.37, 0.30, 0.21);
 
   if (kind == 0u) {
-    let broad = hash21(floor(input.world.xz * 7.0) + vec2f(seed * 17.0, seed * 5.0));
-    let grain = hash21(floor(input.world.xz * 25.0) + vec2f(seed * 37.0, seed * 19.0));
-    let pebble = smoothstep(
-      0.91,
-      0.985,
-      hash21(floor(input.world.xz * 39.0) + vec2f(seed * 53.0, seed * 31.0)),
+    let broad = hash21(floor(input.world.xz * 4.8) + vec2f(seed * 17.0, seed * 5.0));
+    let grain = hash21(floor(input.world.xz * 19.0) + vec2f(seed * 37.0, seed * 19.0));
+    let fleck = hash21(floor(input.world.xz * 34.0) + vec2f(seed * 53.0, seed * 31.0));
+    let bed_distance = nearest_bed_edge_distance(input.world.xz);
+    let earth_mix = 1.0 - smoothstep(0.34, 1.05, bed_distance);
+
+    let meadow = mix(
+      vec3f(0.15, 0.285, 0.070),
+      vec3f(0.335, 0.465, 0.145),
+      0.26 + broad * 0.58 + grain * 0.08,
     );
-    base = mix(vec3f(0.29, 0.245, 0.175), vec3f(0.47, 0.385, 0.265), broad * 0.64 + grain * 0.14);
-    base = mix(base, vec3f(0.40, 0.40, 0.35), pebble * 0.34);
-    base *= 0.93 + normal.y * 0.07;
+    let packed = mix(
+      vec3f(0.30, 0.225, 0.135),
+      vec3f(0.47, 0.355, 0.205),
+      0.18 + broad * 0.56 + grain * 0.15,
+    );
+    base = mix(meadow, packed, earth_mix);
+
+    let dry_thatch = smoothstep(0.78, 0.98, fleck) * (1.0 - earth_mix * 0.72);
+    base += vec3f(0.055, 0.038, 0.010) * dry_thatch;
+    let tiny_stone = smoothstep(0.945, 0.995, grain) * earth_mix;
+    base = mix(base, vec3f(0.43, 0.42, 0.35), tiny_stone * 0.26);
+    base *= 0.94 + normal.y * 0.06;
   } else if (kind == 1u) {
     let mineral = hash21(floor(input.world.xz * 10.0) + vec2f(seed * 29.0, seed * 43.0));
     let fleck = hash21(floor(input.world.xz * 31.0) + vec2f(seed * 11.0, seed * 67.0));
