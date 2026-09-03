@@ -43,7 +43,7 @@ struct VertexOut {
   @location(2) crop_material: vec2f,
   @location(3) stage: f32,
   @location(4) variation: f32,
-  @location(5) active: f32,
+  @location(5) visible_flag: f32,
 };
 
 fn hash11(value: f32) -> f32 {
@@ -107,7 +107,7 @@ fn vs_main(input: VertexIn) -> VertexOut {
   output.variation = hash11(f32(input.instance_index) * 53.0 + input.birth * 97.0 + input.material_kind * 11.0);
   output.normal = vec3f(0.0, 1.0, 0.0);
   output.world = root;
-  output.active = 0.0;
+  output.visible_flag = 0.0;
 
   if (visual_stage < 0.5 || abs(input.crop_kind - crop_kind) > 0.25) {
     output.position = vec4f(2.0, 2.0, 2.0, 1.0);
@@ -142,7 +142,7 @@ fn vs_main(input: VertexIn) -> VertexOut {
   output.normal = normal;
   output.world = world;
   output.stage = stage_norm;
-  output.active = 1.0;
+  output.visible_flag = 1.0;
   return output;
 }
 
@@ -184,7 +184,7 @@ fn harvest_color(crop: f32, stage: f32, variation: f32) -> vec3f {
 
 @fragment
 fn fs_main(input: VertexOut) -> @location(0) vec4f {
-  if (input.active < 0.5) {
+  if (input.visible_flag < 0.5) {
     discard;
   }
 
