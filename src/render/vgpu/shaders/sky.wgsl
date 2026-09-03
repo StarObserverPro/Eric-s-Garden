@@ -35,24 +35,13 @@ fn cloud_field(coord: vec2f, time: f32) -> f32 {
   return smoothstep(0.18, 0.78, first + second + 0.45);
 }
 
-// The near terrain is finite, but the world should not end at the fence. This
-// procedural profile is the vgpu equivalent of Crystal Garden's fogged distant
-// horizon strips: low contrast, no interaction ownership, and no second world.
-fn horizon_profile(ray: vec3f) -> vec2f {
-  let broad =
-    sin(ray.x * 7.2 + ray.z * 4.7) * 0.014 +
-    sin(ray.z * 11.3 - ray.x * 5.6) * 0.008;
-  let ground = -0.082 + broad;
-  let crown_wave = max(0.0, sin(ray.x * 16.1 + ray.z * 12.7 + 0.8));
-  let hedge = ground + 0.020 + pow(crown_wave, 3.0) * 0.026
-    + max(0.0, sin(ray.z * 23.0 - ray.x * 9.0)) * 0.006;
-  return vec2f(ground, hedge);
-}
-
 @fragment
 fn fs_main(@builtin(position) position: vec4f) -> @location(0) vec4f {
   let uv = position.xy / uniforms.viewport.xy;
   let screen = vec2f(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0);
+  // These basis vectors are the exact world camera basis used by geometry.
+  // The sky is an infinite atmosphere behind the depth buffer, not a second
+  // camera and not an owner of ground/horizon silhouettes.
   let ray = normalize(
     uniforms.cameraForward.xyz +
     uniforms.cameraRight.xyz * (screen.x * uniforms.viewport.z * uniforms.viewport.w) +
@@ -87,27 +76,6 @@ fn fs_main(@builtin(position) position: vec4f) -> @location(0) vec4f {
   let cloud_height = smoothstep(-0.05, 0.56, elevation);
   let cloud_color = mix(uniforms.skyHorizon.rgb * 0.92, vec3f(0.97, 0.97, 0.91), sky_mix);
   color = mix(color, cloud_color, clouds * cloud_height * 0.34);
-
-  let profile = horizon_profile(ray);
-  let ground_mask = 1.0 - smoothstep(profile.x - 0.014, profile.x + 0.004, elevation);
-  let hedge_base = smoothstep(profile.x - 0.004, profile.x + 0.003, elevation);
-  let hedge_top = 1.0 - smoothstep(profile.y - 0.004, profile.y + 0.006, elevation);
-  let hedge_mask = hedge_base * hedge_top;
-  let cloudiness = uniforms.scene.z;
-  let far_ground = mix(
-    vec3f(0.30, 0.34, 0.23),
-    uniforms.skyHorizon.rgb * 0.55,
-    0.42 + cloudiness * 0.18,
-  );
-  let far_hedge = mix(
-    vec3f(0.16, 0.23, 0.17),
-    uniforms.skyHorizon.rgb * 0.42,
-    0.34 + cloudiness * 0.16,
-  );
-  color = mix(color, far_ground, ground_mask * 0.94);
-  color = mix(color, far_hedge, hedge_mask * (0.52 - cloudiness * 0.08));
-  let horizon_haze = exp(-abs(elevation - profile.x) * 34.0) * 0.07;
-  color = mix(color, uniforms.skyHorizon.rgb, horizon_haze);
 
   let rain = uniforms.scene.y;
   let luma = dot(color, vec3f(0.299, 0.587, 0.114));
