@@ -20,13 +20,13 @@ It currently composes:
 
 The hosted `.github/workflows/verify.yml` additionally installs vgpu's portable CPU renderer, runs `vgpu doctor`, executes `npm run check`, starts the production preview, and captures a headless **Canvas fallback** screenshot/DOM packet.
 
-Renderer-architecture changes have a separate `.github/workflows/webgpu-architecture-verify.yml`. It is path-scoped to renderer/runtime ownership, vgpu lifecycle integration and related build wiring, and proves that the production build remains on `vgpu · WebGPU` in a WebGPU-enabled browser. It is deliberately **not** a generic visual/modeling gate: crop, soil, vegetation, hardscape or material modeling work should validate the changed model/material itself unless that work also changes renderer/resource architecture.
+That same workflow contains an additional browser-WebGPU architecture smoke, but it is changed-path scoped to renderer/runtime ownership, vgpu lifecycle integration and related build wiring. When activated, it proves that the production build remains on `vgpu · WebGPU` in a WebGPU-enabled browser. It is deliberately **not** a generic visual/modeling gate: crop, soil, vegetation, hardscape or material modeling work should validate the changed model/material itself unless that work also changes renderer/resource architecture.
 
 That distinction matters:
 
 - the portable CPU renderer and Node tests prove bounded shader/render compatibility;
 - the hosted `--disable-gpu` screenshot proves the playable Canvas fallback and production wiring;
-- the architecture-scoped browser job proves the WebGPU/vgpu startup/presentation seam when that seam changes;
+- the architecture-scoped browser step proves the WebGPU/vgpu startup/presentation seam when that seam changes;
 - model/material evidence does not become architecture evidence merely because it uses vgpu;
 - a screenshot existing does not prove aesthetic acceptance.
 
