@@ -47,21 +47,21 @@ test("fixed crop detail evidence exposes node attachments and rosette separation
   });
 
   const nodeOutput = target(gpu, { size: [NODE_WIDTH, NODE_HEIGHT], format: "rgba8unorm", depth: true });
-  const nodeCameraPosition = [3.8, 2.35, 4.9] as const;
+  const nodeCameraPosition = [2.75, 1.75, 3.55] as const;
   const nodeCamera = perspectiveCamera({
-    fov: 34,
+    fov: 30,
     aspect: NODE_WIDTH / NODE_HEIGHT,
     near: 0.1,
     far: 30,
     position: nodeCameraPosition,
-    target: [0, 0.82, 0],
+    target: [0.02, 0.78, 0],
   });
   setCropUniforms(
     crop,
     nodeCamera.viewProjection,
     nodeCameraPosition,
     [1, 2],
-    [[-0.52, 0, 0], [0.62, 0, 0]],
+    [[-0.48, 0, 0], [0.48, 0, 0]],
     [0.56, 0.32, 0.76, 0],
   );
   await crop.compile(nodeOutput);
@@ -80,22 +80,22 @@ test("fixed crop detail evidence exposes node attachments and rosette separation
   expect(nodeStats.lumaRange).toBeGreaterThan(24);
 
   const rosetteOutput = target(gpu, { size: [ROSETTE_WIDTH, ROSETTE_HEIGHT], format: "rgba8unorm", depth: true });
-  const rosetteCameraPosition = [2.65, 1.22, 3.15] as const;
+  const rosetteCameraPosition = [1.75, 0.95, 2.15] as const;
   const rosetteCamera = perspectiveCamera({
-    fov: 33,
+    fov: 28,
     aspect: ROSETTE_WIDTH / ROSETTE_HEIGHT,
     near: 0.1,
     far: 24,
     position: rosetteCameraPosition,
-    target: [0, 0.20, 0],
+    target: [0, 0.18, 0],
   });
   setCropUniforms(
     crop,
     rosetteCamera.viewProjection,
     rosetteCameraPosition,
     [4, 5],
-    [[-0.36, 0, 0], [0.38, 0, 0]],
-    [-0.64, 0.24, -0.73, 0],
+    [[-0.32, 0, 0], [0.34, 0, 0]],
+    [-0.72, 0.16, -0.67, 0],
   );
   await crop.compile(rosetteOutput);
   frame(gpu, (current: Frame) => current.pass(
