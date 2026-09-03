@@ -71,6 +71,63 @@ fn plot_wetness(index: u32) -> f32 {
   return uniforms.wet2[index - 8u];
 }
 
+fn plot_center_xz(index: u32) -> vec2f {
+  let column = f32(index % 4u) - 1.5;
+  let row = f32(index / 4u) - 1.0;
+  return vec2f(column * 1.65, row * 1.75);
+}
+
+fn wet_front(index: u32, progress_value: f32, world_xz: vec2f) -> f32 {
+  let progress = clamp(progress_value, 0.0, 1.0);
+  if (progress <= 0.0) {
+    return 0.0;
+  }
+  if (progress >= 0.999) {
+    return 1.0;
+  }
+
+  let local = (world_xz - plot_center_xz(index)) / 0.69;
+  let seed = f32(index) * 17.17 + 3.4;
+  let edge_noise = value_noise(local * 3.8 + vec2f(seed * 0.11, seed * -0.07));
+  let edge_noise_b = value_noise(local * 5.1 + vec2f(seed * -0.09, seed * 0.13));
+  let edge_noise_c = value_noise(local * 6.4 + vec2f(seed * 0.19, seed * 0.05));
+
+  let origin = vec2f(
+    -0.38 + (hash21(vec2f(seed, 1.7)) - 0.5) * 0.18,
+    (hash21(vec2f(seed, 4.9)) - 0.5) * 0.42,
+  );
+  let origin_b = origin + vec2f(
+    0.28 + (hash21(vec2f(seed, 7.3)) - 0.5) * 0.16,
+    0.17 + (hash21(vec2f(seed, 9.1)) - 0.5) * 0.28,
+  );
+  let origin_c = origin + vec2f(
+    0.46 + (hash21(vec2f(seed, 11.7)) - 0.5) * 0.18,
+    -0.20 + (hash21(vec2f(seed, 13.9)) - 0.5) * 0.26,
+  );
+
+  let distance_a = length((local - origin) * vec2f(0.92, 1.08));
+  let distance_b = length((local - origin_b) * vec2f(1.08, 0.90));
+  let distance_c = length((local - origin_c) * vec2f(0.96, 1.12));
+
+  let radius_a = 0.045 + progress * 1.58 + (edge_noise - 0.5) * 0.27;
+  let primary = 1.0 - smoothstep(radius_a - 0.09, radius_a + 0.11, distance_a);
+
+  let secondary_progress = smoothstep(0.07, 0.70, progress);
+  let radius_b = -0.10 + secondary_progress * 1.43 + (edge_noise_b - 0.5) * 0.22;
+  let secondary = 1.0 - smoothstep(radius_b - 0.08, radius_b + 0.11, distance_b);
+
+  let tertiary_progress = smoothstep(0.16, 0.82, progress);
+  let radius_c = -0.16 + tertiary_progress * 1.26 + (edge_noise_c - 0.5) * 0.20;
+  let tertiary = 1.0 - smoothstep(radius_c - 0.07, radius_c + 0.10, distance_c);
+
+  let splash_noise = value_noise(local * 7.2 + vec2f(seed * 0.23, seed * 0.17));
+  let early_window = smoothstep(0.015, 0.09, progress) * (1.0 - smoothstep(0.24, 0.44, progress));
+  let splash = smoothstep(0.84, 0.96, splash_noise) * early_window;
+  let merged = max(primary, max(secondary * 0.92, tertiary * 0.78));
+  let saturation = 0.74 + progress * 0.26;
+  return clamp(max(merged, splash * 0.72) * saturation, 0.0, 1.0);
+}
+
 fn cloud_shadow(world: vec3f) -> f32 {
   let time = uniforms.scene.x;
   let cloudiness = uniforms.scene.y;
@@ -86,7 +143,7 @@ fn fs_main(input: VertexOut) -> @location(0) vec4f {
   let plot_index = u32(input.soil_data.x + 0.5);
   let seed = input.soil_data.y;
   let surface_type = input.soil_data.z;
-  let moisture = plot_wetness(plot_index);
+  let moisture = wet_front(plot_index, plot_wetness(plot_index), input.world.xz);
 
   let eps = 0.012;
   let h_left = soil_micro_height(input.world.xz - vec2f(eps, 0.0), seed);

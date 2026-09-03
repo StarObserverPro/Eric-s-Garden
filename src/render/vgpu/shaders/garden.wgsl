@@ -60,6 +60,12 @@ fn rotate_y(value: vec3f, angle: f32) -> vec3f {
   return vec3f(value.x * c - value.z * s, value.y, value.x * s + value.z * c);
 }
 
+fn rotate_z(value: vec3f, angle: f32) -> vec3f {
+  let c = cos(angle);
+  let s = sin(angle);
+  return vec3f(value.x * c - value.y * s, value.x * s + value.y * c, value.z);
+}
+
 fn plot_center(index: u32) -> vec3f {
   let column = f32(index % 4u) - 1.5;
   let row = f32(index / 4u) - 1.0;
@@ -132,10 +138,53 @@ fn box_placement(kind: u32, index: u32, seed: f32) -> BoxPlacement {
 fn vs_main(input: VertexIn) -> VertexOut {
   let kind = u32(uniforms.weather.y + 0.5);
   let seed = hash11(f32(input.instance_index) * 29.0 + f32(kind) * 101.0 + 7.0);
-  let placement = box_placement(kind, input.instance_index, seed);
-  let transformed = rotate_y(input.local_position * placement.scale, placement.angle);
-  let world = placement.center + transformed;
-  let normal = normalize(rotate_y(input.local_normal, placement.angle));
+  var world: vec3f;
+  var normal: vec3f;
+
+  if (kind == 4u) {
+    let active_plot = uniforms.weather.z;
+    if (active_plot < -0.5) {
+      world = vec3f(0.0, -80.0, 0.0);
+      normal = input.local_normal;
+    } else {
+      let plot_index = u32(active_plot + 0.5);
+      let progress = clamp(uniforms.weather.w, 0.0, 1.0);
+      let enter = smoothstep(0.0, 0.12, progress);
+      let leave = smoothstep(0.84, 1.0, progress);
+      let lift = (1.0 - enter + leave) * 0.32;
+      let tilt = -0.27 * smoothstep(0.035, 0.20, progress) * (1.0 - leave * 0.45);
+      let root = plot_center(plot_index) + vec3f(
+        -0.66,
+        0.54,
+        (hash11(f32(plot_index) * 31.0 + 5.0) - 0.5) * 0.18,
+      );
+      let model_scale = 0.56;
+
+      if (input.part > 1.5) {
+        let pour = smoothstep(0.08, 0.18, progress) * (1.0 - smoothstep(0.82, 0.96, progress));
+        if (pour < 0.02) {
+          world = vec3f(0.0, -80.0, 0.0);
+        } else {
+          let ripple = sin(uniforms.scene.x * 18.0 + input.local_position.z * 140.0) * 0.004;
+          world = root + vec3f(
+            input.local_position.x * model_scale,
+            input.local_position.y * model_scale + lift,
+            input.local_position.z * model_scale + ripple,
+          );
+        }
+        normal = input.local_normal;
+      } else {
+        let transformed = rotate_z(input.local_position * model_scale, tilt);
+        world = root + transformed + vec3f(0.0, lift, 0.0);
+        normal = normalize(rotate_z(input.local_normal, tilt));
+      }
+    }
+  } else {
+    let placement = box_placement(kind, input.instance_index, seed);
+    let transformed = rotate_y(input.local_position * placement.scale, placement.angle);
+    world = placement.center + transformed;
+    normal = normalize(rotate_y(input.local_normal, placement.angle));
+  }
 
   var output: VertexOut;
   output.position = uniforms.viewProjection * vec4f(world, 1.0);
@@ -158,6 +207,7 @@ fn cloud_shadow(world: vec3f) -> f32 {
 fn fs_main(input: VertexOut) -> @location(0) vec4f {
   let kind = u32(input.instance_data.x + 0.5);
   let seed = input.instance_data.z;
+  let part = input.instance_data.w;
   var base = vec3f(0.4, 0.55, 0.28);
 
   if (kind == 0u) {
@@ -174,6 +224,14 @@ fn fs_main(input: VertexOut) -> @location(0) vec4f {
   } else if (kind == 3u) {
     let grain = 0.5 + 0.5 * sin(input.world.y * 13.0 + seed * 17.0);
     base = mix(vec3f(0.31, 0.19, 0.095), vec3f(0.50, 0.31, 0.14), grain * 0.6);
+  } else if (kind == 4u) {
+    if (part < 0.5) {
+      base = vec3f(0.24, 0.42, 0.32);
+    } else if (part < 1.5) {
+      base = vec3f(0.66, 0.50, 0.27);
+    } else {
+      base = vec3f(0.26, 0.69, 0.86);
+    }
   }
 
   let normal = normalize(input.normal);
@@ -186,6 +244,22 @@ fn fs_main(input: VertexOut) -> @location(0) vec4f {
     uniforms.ambientColor.rgb * (0.56 + upward * 0.30) +
     uniforms.lightColor.rgb * (0.18 + wrapped * 0.82) * uniforms.lightParams.x
   ) * shadow;
+
+  if (kind == 4u) {
+    let view_direction = normalize(uniforms.cameraPosition.xyz - input.world);
+    let half_direction = normalize(light_direction + view_direction);
+    let n_dot_h = max(dot(normal, half_direction), 0.0);
+    var specular_strength = 0.055;
+    var specular_power = 18.0;
+    if (part > 0.5 && part < 1.5) {
+      specular_strength = 0.22;
+      specular_power = 34.0;
+    } else if (part > 1.5) {
+      specular_strength = 0.16;
+      specular_power = 28.0;
+    }
+    color += uniforms.lightColor.rgb * pow(n_dot_h, specular_power) * specular_strength;
+  }
 
   let rain = uniforms.lightParams.z;
   let luma = dot(color, vec3f(0.299, 0.587, 0.114));
