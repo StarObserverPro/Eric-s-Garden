@@ -12,7 +12,8 @@ For every request:
 2. Read this file.
 3. Read only the relevant section of [`docs/PROJECT_SCOPE_R1.md`](docs/PROJECT_SCOPE_R1.md).
 4. For construction or repair, read one explicitly activated packet under [`docs/work/`](docs/work/) and the source files it names.
-5. Inspect fresh `main` before treating an old plan, branch, PR, comment, screenshot, or deployment as current.
+5. Load operational guidance only when the task needs it: [`docs/VERIFICATION.md`](docs/VERIFICATION.md) for evidence decisions, [`docs/skills/render-visual-qa/SKILL.md`](docs/skills/render-visual-qa/SKILL.md) for interactive rendering diagnosis, and [`docs/RELEASE_WORKFLOW.md`](docs/RELEASE_WORKFLOW.md) for merge or production release.
+6. Inspect fresh `main` before treating an old plan, branch, PR, comment, screenshot, or deployment as current.
 
 Do not scan all documentation or reconstruct ordinary work from repository history. History is cold evidence: load one exact item only when current code or the active packet points to it.
 
@@ -71,7 +72,7 @@ Evidence is proportional:
 - performance: fixed seed, viewport/DPR and instance tier, with frame/draw/pass/resource measurements;
 - fallback/save seams: success, forced failure, round trip, reset, and renderer-switch behavior as applicable.
 
-Map each acceptance item to the final diff and evidence. Pin vgpu and rendering dependencies to reviewed versions; upgrade them only in a named maintenance change. Merge and deployment are separate explicit actions.
+Map each acceptance item to the final diff and evidence. Pin vgpu and rendering dependencies to reviewed versions; upgrade them only in a named maintenance change. Merge and deployment are separate explicit actions. Use [`docs/VERIFICATION.md`](docs/VERIFICATION.md) when claim boundaries need interpretation and [`docs/RELEASE_WORKFLOW.md`](docs/RELEASE_WORKFLOW.md) only when work actually reaches merge/release.
 
 ## 6. Traps worth remembering
 
@@ -83,6 +84,7 @@ Map each acceptance item to the final diff and evidence. Pin vgpu and rendering 
 - Do not add effects without a garden carrier or add scenery only to justify an effect.
 - Do not let old plans or failed routes block a different current solution.
 - Do not import Crystal Garden's full governance or failure history into ordinary work here.
+- Do not import Crystal Garden's WebGL/Spector diagnostic stack merely to validate this WebGPU-first renderer; use the local render-QA skill and add tooling only for a demonstrated gap.
 - A beautiful frame that obscures touch targets, growth state, or feedback is a regression.
 
 When uncertain, preserve the child's simple loop, one source of game truth, one active renderer/frame owner, a reversible experiment, and a clear path back to the Canvas baseline. If none of those boundaries is affected, proceed with the smallest reasonable implementation instead of inventing a new rule.
