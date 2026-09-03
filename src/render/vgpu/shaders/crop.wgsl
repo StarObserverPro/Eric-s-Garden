@@ -201,7 +201,7 @@ fn fs_main(input: VertexOut) -> @location(0) vec4f {
     backlight_strength = 0.12;
   } else if (material > 1.5 && material < 2.5) {
     albedo = harvest_color(crop, input.stage, variation);
-    roughness = select(0.62, 0.48, crop > 0.5 && crop < 1.5 || crop > 4.5);
+    roughness = select(0.62, 0.48, ((crop > 0.5 && crop < 1.5) || crop > 4.5));
     backlight_strength = 0.08;
   } else if (material > 2.5 && material < 3.5) {
     albedo = select(vec3f(0.96, 0.83, 0.50), vec3f(0.96, 0.91, 0.73), crop > 4.5);
