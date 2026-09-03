@@ -281,8 +281,9 @@ function appendPumpkin(output: number[]): number {
   }
 
   const leafAnchors: readonly (readonly [Vec3, number, number])[] = [
-    [[0.02, 0.045, 0.02], -0.6, 0.00],
-    [[0.18, 0.055, -0.05], 1.15, 0.00],
+    // The first two leaves deliberately fan behind the primary fruit instead of occupying its volume.
+    [[0.02, 0.045, 0.02], -1.15, 0.00],
+    [[0.18, 0.055, -0.05], -0.85, 0.00],
     [[0.34, 0.055, 0.04], -1.00, 0.20],
     [[0.51, 0.052, -0.05], 0.72, 0.28],
     [[0.67, 0.055, 0.00], -1.10, 0.36],
@@ -292,14 +293,27 @@ function appendPumpkin(output: number[]): number {
   ];
   for (let index = 0; index < leafAnchors.length; index += 1) {
     const [anchor, side, birth] = leafAnchors[index]!;
+    const petioleLength = index < 2 ? 0.27 : 0.20;
     const petioleEnd: Vec3 = [
-      anchor[0] + Math.cos(side) * 0.20,
-      0.20 + (index % 3) * 0.022,
-      anchor[2] + Math.sin(side) * 0.20,
+      anchor[0] + Math.cos(side) * petioleLength,
+      0.20 + (index % 3) * 0.022 + (index < 2 ? 0.018 : 0),
+      anchor[2] + Math.sin(side) * petioleLength,
     ];
-    const leafRadius = index === leafAnchors.length - 1 ? 0.20 : 0.23 + (index % 2) * 0.025;
+    const leafRadius = index === 0 ? 0.205 : index === 1 ? 0.215 : index === leafAnchors.length - 1 ? 0.20 : 0.23 + (index % 2) * 0.025;
     triangles += appendCylinderBetween(output, anchor, petioleEnd, 0.009, 6, crop, MATERIAL_STEM, birth, 0.58, anchor);
     triangles += appendPalmateLeaf(output, petioleEnd, side, leafRadius, 14, crop, birth, 0.86, anchor);
+
+    // Three low-profile structural veins turn each palmate leaf into a readable surface rather than a flat green patch.
+    for (let vein = -1; vein <= 1; vein += 1) {
+      const veinAngle = side + vein * 0.90;
+      const veinStart: Vec3 = [petioleEnd[0], petioleEnd[1] + leafRadius * 0.052, petioleEnd[2]];
+      const veinEnd: Vec3 = [
+        petioleEnd[0] + Math.cos(veinAngle) * leafRadius * 0.70,
+        petioleEnd[1] + leafRadius * 0.006,
+        petioleEnd[2] + Math.sin(veinAngle) * leafRadius * 0.70,
+      ];
+      triangles += appendCylinderBetween(output, veinStart, veinEnd, 0.0022, 5, crop, MATERIAL_STEM, birth, 0.74, anchor);
+    }
   }
 
   const fruitCenter: Vec3 = [0.22, 0.155, 0.12];
