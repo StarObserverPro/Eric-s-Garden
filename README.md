@@ -38,6 +38,8 @@ This runs:
 4. a Dawn-backed `vgpu/node` frame and readback;
 5. strict TypeScript plus the production Vite build.
 
+The hosted Verify workflow also captures the playable Canvas fallback. For evidence scope, browser/WebGPU claim boundaries, visual QA, and performance evidence, see [`docs/VERIFICATION.md`](docs/VERIFICATION.md) and the optional [`render-visual-qa` skill](docs/skills/render-visual-qa/SKILL.md).
+
 ## Static production output
 
 ```bash
@@ -45,6 +47,8 @@ npm run build
 ```
 
 The deployable site is `dist/`. Runtime production remains static: no backend, database, CDN model, image service or server function is required.
+
+Merge and production deployment are separate actions. When a release is authorized, use [`docs/RELEASE_WORKFLOW.md`](docs/RELEASE_WORKFLOW.md); a multi-PR “merge and deploy” request is treated as one release train and deploys the final merged `main` state once unless the user asks for separate releases.
 
 ## Renderer ownership
 
@@ -89,6 +93,9 @@ src/render/vgpu/           vgpu scene, geometry and WGSL
 src/render/vgpu/raw/       narrow raw WebGPU adapters only
 src/diagnostics/           render metrics panel binding
 tests/                     game, snapshot, mock and Node checks
+docs/VERIFICATION.md       proportional evidence and claim boundaries
+docs/RELEASE_WORKFLOW.md   merge, release-train and deployment procedure
+docs/skills/               opt-in operational skills
 docs/work/                 active construction packet
 docs/experience/           reusable implementation lessons
 ```
