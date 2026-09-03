@@ -44,10 +44,15 @@ struct VertexOut {
   @location(3) stage: f32,
   @location(4) variation: f32,
   @location(5) visible_flag: f32,
+  @location(6) local_surface: vec3f,
 };
 
 fn hash11(value: f32) -> f32 {
   return fract(sin(value * 12.9898 + 78.233) * 43758.5453);
+}
+
+fn hash21(value: vec2f) -> f32 {
+  return fract(sin(dot(value, vec2f(127.1, 311.7))) * 43758.5453);
 }
 
 fn component4(value: vec4f, lane: u32) -> f32 {
@@ -107,6 +112,7 @@ fn vs_main(input: VertexIn) -> VertexOut {
   output.variation = hash11(f32(input.instance_index) * 53.0 + input.birth * 97.0 + input.material_kind * 11.0);
   output.normal = vec3f(0.0, 1.0, 0.0);
   output.world = root;
+  output.local_surface = vec3f(0.0);
   output.visible_flag = 0.0;
 
   if ((visual_stage < 0.5) || (abs(input.crop_kind - crop_kind) > 0.25)) {
@@ -127,16 +133,18 @@ fn vs_main(input: VertexIn) -> VertexOut {
   let is_stem = (input.material_kind > 0.5) && (input.material_kind < 1.5);
   let is_foliage = input.material_kind < 0.5;
 
-  // Pumpkin baseline vines were technically present but too thin and too close to soil to read.
-  // Inflate/lift only the low stem carrier so the main vine remains continuous without moving its root.
+  // The cultivated soil center sits slightly below the authoritative plot root.
+  // Seat every crop into that surface instead of letting root collars hover above it.
+  local.y -= 0.018 * whole_scale;
+
+  // Keep one clear pumpkin main vine: lift and thicken the low carrier without inventing side-vine topology.
   if (is_pumpkin && is_stem) {
     let ground_factor = 1.0 - smoothstep(0.10, 0.24, max(local.y, 0.0));
-    local += input.local_normal * (0.011 * whole_scale * organ_growth * ground_factor);
-    local.y += 0.026 * whole_scale * ground_factor;
+    local += input.local_normal * (0.016 * whole_scale * organ_growth * ground_factor);
+    local.y += 0.035 * whole_scale * ground_factor;
   }
 
   // Keep pumpkin foliage out of the primary fruit occupancy pocket near the home root.
-  // This is a presentation constraint only; root/gameplay coordinates remain authoritative.
   if (is_pumpkin && is_foliage) {
     let fruit_center = vec2f(0.22, 0.12) * whole_scale;
     let fruit_offset = local.xz - fruit_center;
@@ -150,6 +158,7 @@ fn vs_main(input: VertexIn) -> VertexOut {
     local.y += clearance * 0.050 * whole_scale;
   }
 
+  let material_local = local;
   let basis = orientation_basis(input.instance_index, crop_kind, root);
   let basis_x = basis[0];
   let basis_z = basis[1];
@@ -168,6 +177,7 @@ fn vs_main(input: VertexIn) -> VertexOut {
   output.position = uniforms.viewProjection * vec4f(world, 1.0);
   output.normal = normal;
   output.world = world;
+  output.local_surface = material_local;
   output.stage = stage_norm;
   output.visible_flag = 1.0;
   return output;
@@ -269,6 +279,18 @@ fn fs_main(input: VertexOut, @builtin(front_facing) front_facing: bool) -> @loca
     ambient_strength = 0.56;
   }
 
+  let surface_noise = hash21(floor(input.world.xz * 22.0 + vec2f(input.world.y * 11.0, variation * 29.0)));
+  if (is_foliage || is_husk) {
+    let leaf_wave = 0.5 + 0.5 * sin(
+      input.world.x * 18.0 + input.world.z * 15.0 + input.world.y * 13.0 + variation * 6.2831853
+    );
+    albedo *= 0.94 + leaf_wave * 0.10;
+  } else if (is_stem) {
+    albedo *= 0.95 + surface_noise * 0.08;
+  } else if (is_harvest && crop < 0.5) {
+    albedo *= 0.94 + surface_noise * 0.08;
+  }
+
   let interpolated_normal = normalize(input.normal);
   let sided_normal = select(-interpolated_normal, interpolated_normal, front_facing);
   var face_normal = normalize(cross(dpdx(input.world), dpdy(input.world)));
@@ -317,9 +339,21 @@ fn fs_main(input: VertexOut, @builtin(front_facing) front_facing: bool) -> @loca
     let specular_strength = (0.035 + (1.0 - roughness) * 0.20) * mix(0.58, 1.0, fresnel);
     color += uniforms.lightColor.rgb * specular * specular_strength * uniforms.lightParams.x * shadow;
 
-    // Mild per-face tone separation prevents round fruit from collapsing into one flat color patch.
+    // Per-face tone separation prevents fruit from collapsing into a single smooth color patch.
     let facet_tone = 0.94 + 0.08 * clamp(face_normal.y * 0.5 + 0.5, 0.0, 1.0);
     color *= facet_tone;
+
+    // Pumpkin ribs are material detail on the existing one-fruit topology, not extra geometry.
+    if ((crop > 2.5) && (crop < 3.5)) {
+      let whole_scale = 0.40 + input.stage * 0.60;
+      let fruit_center = vec2f(0.22, 0.12) * whole_scale;
+      let fruit_offset = input.local_surface.xz - fruit_center;
+      let fruit_length = max(length(fruit_offset), 0.001);
+      let fruit_direction = fruit_offset / fruit_length;
+      let angle = atan2(fruit_direction.y, fruit_direction.x);
+      let rib = 0.5 + 0.5 * cos(angle * 8.0);
+      color *= 0.91 + pow(rib, 2.0) * 0.11;
+    }
   }
 
   let rain = uniforms.lightParams.z;
