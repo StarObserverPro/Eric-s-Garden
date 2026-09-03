@@ -297,8 +297,9 @@ function appendPumpkin(output: number[]): number {
       0.17 + (index % 3) * 0.018,
       anchor[2] + Math.sin(side) * 0.20,
     ];
+    const leafRadius = index === leafAnchors.length - 1 ? 0.20 : 0.23 + (index % 2) * 0.025;
     triangles += appendCylinderBetween(output, anchor, petioleEnd, 0.009, 6, crop, MATERIAL_STEM, birth, 0.58, anchor);
-    triangles += appendPalmateLeaf(output, petioleEnd, side, 0.23 + (index % 2) * 0.025, 14, crop, birth, 0.86, anchor);
+    triangles += appendPalmateLeaf(output, petioleEnd, side, leafRadius, 14, crop, birth, 0.86, anchor);
   }
 
   const fruitCenter: Vec3 = [0.22, 0.155, 0.12];
