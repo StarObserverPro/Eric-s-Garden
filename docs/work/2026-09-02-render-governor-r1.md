@@ -1,6 +1,6 @@
 # Dynamic render governor R1
 
-Status: executing
+Status: review
 Base main SHA: `e48792114e7d191e023f89ffd95771e71d94f7ae`
 
 ## Objective
@@ -25,11 +25,14 @@ Add one runtime-owned, hysteretic render-budget governor that can reduce non-cor
 - Architecture boundary touched: frame ownership policy only to add hidden-page pause/resume under the existing owner; no ownership transfer.
 
 ## Current state
-- Completed: none.
-- Current step: implement pure governor contract and tests.
-- Next action: wire vegetation bundle variants into the current vgpu generation.
-- Blocker: PR #7 also edits `vgpu-renderer.ts`; keep this branch's renderer diff vegetation-only and replay after #7 if needed.
+- Completed: A1, A2, A3, A4, A5.
+- Current step: PR #8 review.
+- Next action: merge after final-head Verify; if PR #7 lands first, replay the vegetation-only renderer seam onto the hardscape renderer rather than restoring obsolete path/fence code.
+- Blocker: PR #7 independently edits `vgpu-renderer.ts`; merge order may require a narrow conflict replay.
 
 ## Evidence
-- `npm run check` on final branch.
-- PR diff demonstrates one RAF owner, one GPU context and no renderer recreation on governor tier changes.
+- PR #8: `Add dynamic WebGPU render governor`.
+- Verify run `33713767035` passed shader/model/mock/Node/production checks plus deterministic soil, vgpu meadow and Canvas fallback evidence on code head `99378d93325016c6f723c1538449be1573a06965`.
+- `tests/render-governor.test.ts` covers severe/mild degradation, slow recovery, user ceiling and hidden-gap sampling reset.
+- `tests/vgpu-quality-bundles.test.ts` replays prepared 500 / 1,500 / 4,000 bundle variants against one shared draw and rejects an unprepared tier.
+- Final diff keeps one RAF owner, one WebGPU context and changes runtime vegetation load by bundle selection rather than renderer recreation.
