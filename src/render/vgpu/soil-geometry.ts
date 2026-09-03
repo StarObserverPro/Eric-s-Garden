@@ -5,7 +5,7 @@ export const SOIL_CLODS_PER_PLOT = 40;
 export const SOIL_VERTEX_STRIDE_FLOATS = 9;
 
 const SOIL_HALF_EXTENT = 0.67;
-const SOIL_BOTTOM = -0.405;
+const SOIL_BOTTOM = -0.235;
 const CLODS_SEGMENTS = 8;
 
 type Vec3 = readonly [number, number, number];
@@ -284,19 +284,19 @@ function soilHeight(u: number, v: number, seed: number): number {
   const squareEdge = Math.max(Math.abs(u), Math.abs(v));
   const superEdge = Math.pow(Math.pow(Math.abs(u), 4) + Math.pow(Math.abs(v), 4), 0.25);
   const edgeDistance = Math.max(0, 1 - squareEdge);
-  const interior = smoothstep(0.12, 0.42, edgeDistance);
-  const shoulder = smoothstep(0.56, 1.0, Math.min(1, superEdge));
-  const mound = 0.10 * (1 - smoothstep(0.12, 0.88, squareEdge));
-  const coarse = (fbm(u * 1.18 + 7.1, v * 1.18 - 2.7, seed + 17) - 0.5) * 0.078;
-  const medium = (fbm(u * 3.65 - 4.4, v * 3.65 + 8.6, seed + 53) - 0.5) * 0.036;
+  const interior = smoothstep(0.10, 0.36, edgeDistance);
+  const shoulder = smoothstep(0.68, 1.0, Math.min(1, superEdge));
+  const mound = 0.19 * (1 - smoothstep(0.08, 0.94, squareEdge));
+  const coarse = (fbm(u * 1.18 + 7.1, v * 1.18 - 2.7, seed + 17) - 0.5) * 0.046;
+  const medium = (fbm(u * 3.65 - 4.4, v * 3.65 + 8.6, seed + 53) - 0.5) * 0.024;
   const rakeNoise = valueNoise(u * 2.15 + 9.2, v * 2.15 - 3.4, seed + 89) - 0.5;
-  const rake = Math.sin((v * 5.2 + rakeNoise * 0.18) * Math.PI + seed * 0.00013) * 0.012;
-  const shallowPits = (valueNoise(u * 5.8 - 1.7, v * 5.8 + 2.9, seed + 131) - 0.5) * 0.017;
-  const brokenShoulder = (valueNoise(u * 7.4 + 2.3, v * 7.4 - 6.1, seed + 173) - 0.5) * 0.032 * shoulder;
-  return -0.026
+  const rake = Math.sin((v * 5.2 + rakeNoise * 0.18) * Math.PI + seed * 0.00013) * 0.009;
+  const shallowPits = (valueNoise(u * 5.8 - 1.7, v * 5.8 + 2.9, seed + 131) - 0.5) * 0.011;
+  const brokenShoulder = (valueNoise(u * 7.4 + 2.3, v * 7.4 - 6.1, seed + 173) - 0.5) * 0.014 * shoulder;
+  return -0.205
     + mound
     + interior * (coarse + medium + rake + shallowPits)
-    - 0.31 * Math.pow(shoulder, 1.18)
+    - 0.010 * Math.pow(shoulder, 1.25)
     + brokenShoulder;
 }
 

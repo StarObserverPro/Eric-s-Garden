@@ -8,7 +8,7 @@ import {
 } from "../src/render/vgpu/soil-geometry";
 
 describe("procedural soil geometry", () => {
-  test("builds real relief, collapsing shoulders and hundreds of faceted aggregates", () => {
+  test("builds cultivated relief with shallow terrain-closing shoulders and faceted aggregates", () => {
     const { data, stats } = createSoilGeometryData();
     expect(stats.gridResolution).toBe(SOIL_GRID_RESOLUTION);
     expect(stats.clodCount).toBe(SOIL_CLODS_PER_PLOT * 12);
@@ -41,6 +41,9 @@ describe("procedural soil geometry", () => {
 
     expect(plotIndices.size).toBe(12);
     expect(surfaceTypes).toEqual(new Set([0, 1, 2]));
-    expect(maxTop - minTop).toBeGreaterThan(0.34);
+    expect(maxTop - minTop).toBeGreaterThan(0.15);
+    expect(maxTop - minTop).toBeLessThan(0.30);
+    expect(minTop).toBeGreaterThan(-0.24);
+    expect(maxTop).toBeLessThan(0.07);
   });
 });
