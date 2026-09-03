@@ -11,7 +11,7 @@
     "dev": "vite --host 0.0.0.0 --port 4173",
     "build": "tsc -p tsconfig.json --noEmit && vite build",
     "test": "vitest run",
-    "shader:check": "vgpu check src/render/vgpu/shaders/soil.wgsl --require-validation && vgpu check src/render/vgpu/shaders/garden.wgsl --require-validation && vgpu check src/render/vgpu/shaders/vegetation.wgsl --require-validation && vgpu check src/render/vgpu/shaders/sky.wgsl --require-validation && vgpu check src/render/vgpu/shaders/blit.wgsl --require-validation",
+    "shader:check": "vgpu check src/render/vgpu/shaders/soil.wgsl --require-validation && vgpu check src/render/vgpu/shaders/garden.wgsl --require-validation && vgpu check src/render/vgpu/shaders/hardscape.wgsl --require-validation && vgpu check src/render/vgpu/shaders/vegetation.wgsl --require-validation && vgpu check src/render/vgpu/shaders/sky.wgsl --require-validation && vgpu check src/render/vgpu/shaders/blit.wgsl --require-validation",
     "check": "npm run shader:check && npm run test && npm run build"
   },
   "dependencies": {
