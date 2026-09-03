@@ -1,6 +1,6 @@
 # Verification and release migration
 
-Status: executing
+Status: review
 Base main SHA: 118a889c3dd6dfcc78fe9a74c710b081299c58f5
 
 ## Objective
@@ -24,11 +24,13 @@ Bring the reusable verification, visual-QA, merge, and deployment guidance from 
 - Architecture boundary touched: no; this documents the existing static deployment and evidence boundaries.
 
 ## Current state
-- Completed: source/target audit and migration boundary
-- Current step: write the adapted guidance and skill
-- Next action: review exact diff and links, then open a PR
+- Completed: A1, A2, A3, A4, A5
+- Current step: exact-diff and PR review
+- Next action: merge only if separately authorized; deployment is not part of this worklet
 - Blocker: none
 
 ## Evidence
 - Source references: Crystal Garden `docs/VERIFICATION.md`, `docs/RELEASE_WORKFLOW.md`, `docs/WEBGL_BROWSER_SMOKE.md`, and `plugins/webgl-visual-qa/skills/webgl-visual-qa/SKILL.md`.
 - Target facts: current `package.json`, `.github/workflows/verify.yml`, `AGENTS.md`, `README.md`, and `docs/PROJECT_SCOPE_R1.md` on base SHA above.
+- Adaptation review: Crystal-specific gate maps, control ledgers, CI-budget machinery, release ledger, and WebGL/Spector plugin runtime were intentionally excluded.
+- Link/path review: new guidance links resolve within `docs/`; root boot paths point to the new files conditionally rather than loading them for every task.
