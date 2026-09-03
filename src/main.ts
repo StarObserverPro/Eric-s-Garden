@@ -36,9 +36,18 @@ import {
   updateDiagnostics,
   type DiagnosticsElements,
 } from "./diagnostics/panel";
+import {
+  CAMERA_DEFAULT_ELEVATION,
+  CAMERA_ZOOM_MIN,
+  clampCameraElevation,
+  maxCameraZoom,
+  maxCanvasCameraZoom,
+  type CameraViewState,
+} from "./scene/camera-controls";
 import { createSceneSnapshot } from "./scene/snapshot";
 
 const RENDER_SETTINGS_KEY = "eric-secret-garden-render-r1";
+const CAMERA_VIEW_KEY = "eric-secret-garden-camera-view-r1";
 
 const element = {
   stage: byId<HTMLElement>("gardenStage"),
@@ -101,6 +110,7 @@ const diagnostics: DiagnosticsElements = {
 
 let state = loadState(localStorage);
 let renderSettings = loadRenderSettings();
+let cameraView = loadCameraView(state.camera.zoom);
 let toastTimer = 0;
 
 syncSettingsControls(diagnostics, renderSettings);
@@ -109,8 +119,11 @@ const runtime = new RenderRuntime({
   gpuCanvas: element.gpuCanvas,
   cropOverlay: element.cropOverlay,
   settings: renderSettings,
-  snapshot: createSceneSnapshot(state),
-  onMetrics: (metrics) => updateDiagnostics(diagnostics, metrics),
+  snapshot: createSceneSnapshot(state, cameraView),
+  onMetrics: (metrics) => {
+    updateDiagnostics(diagnostics, metrics);
+    reconcileCameraZoom();
+  },
   onFallback: (message) => showToast(message, 2600),
 });
 
@@ -169,7 +182,7 @@ function update(): void {
   document.querySelectorAll<HTMLButtonElement>(".tool-btn").forEach((button) => {
     button.classList.toggle("active", button.dataset.tool === state.tool);
   });
-  runtime.setSnapshot(createSceneSnapshot(state));
+  runtime.setSnapshot(createSceneSnapshot(state, cameraView));
 }
 
 function commit(result: ActionResult, options: { showComplete?: boolean } = {}): void {
@@ -275,7 +288,16 @@ function showToast(text: string, duration = 1700): void {
 
 function updateCameraOnly(): void {
   saveState(localStorage, state);
-  runtime.setSnapshot(createSceneSnapshot(state));
+  saveCameraView(cameraView);
+  runtime.setSnapshot(createSceneSnapshot(state, cameraView));
+}
+
+function reconcileCameraZoom(): void {
+  const nextZoom = clamp(cameraView.zoom, CAMERA_ZOOM_MIN, maxZoomForStage());
+  if (Math.abs(nextZoom - cameraView.zoom) < 0.0001) return;
+  cameraView = { ...cameraView, zoom: nextZoom };
+  saveCameraView(cameraView);
+  runtime.setSnapshot(createSceneSnapshot(state, cameraView));
 }
 
 function applyRenderSettings(next: RenderSettings): void {
@@ -343,7 +365,9 @@ element.retryRenderer.addEventListener("click", () => void runtime.applySettings
 
 interface DragState {
   readonly originX: number;
+  readonly originY: number;
   readonly angle: number;
+  readonly elevation: number;
   readonly started: number;
   moved: boolean;
 }
@@ -365,7 +389,9 @@ element.stage.addEventListener("pointerdown", (event) => {
   if (pointers.size === 1) {
     drag = {
       originX: point.x,
+      originY: point.y,
       angle: state.camera.angle,
+      elevation: cameraView.elevation,
       started: performance.now(),
       moved: false,
     };
@@ -373,7 +399,7 @@ element.stage.addEventListener("pointerdown", (event) => {
     const values = [...pointers.values()];
     pinch = {
       distance: distance(values[0]!, values[1]!),
-      zoom: state.camera.zoom,
+      zoom: cameraView.zoom,
     };
     drag = undefined;
   }
@@ -386,12 +412,21 @@ element.stage.addEventListener("pointermove", (event) => {
   if (pointers.size === 2 && pinch) {
     const values = [...pointers.values()];
     const currentDistance = distance(values[0]!, values[1]!);
-    state.camera.zoom = clamp(pinch.zoom * currentDistance / Math.max(1, pinch.distance), 0.76, 1.35);
+    const nextZoom = pinch.zoom * currentDistance / Math.max(1, pinch.distance);
+    cameraView = {
+      ...cameraView,
+      zoom: clamp(nextZoom, CAMERA_ZOOM_MIN, maxZoomForStage()),
+    };
     updateCameraOnly();
   } else if (drag) {
     const deltaX = point.x - drag.originX;
-    if (Math.abs(deltaX) > 7) drag.moved = true;
+    const deltaY = point.y - drag.originY;
+    if (Math.hypot(deltaX, deltaY) > 7) drag.moved = true;
     state.camera.angle = drag.angle + deltaX * 0.006;
+    cameraView = {
+      ...cameraView,
+      elevation: clampCameraElevation(drag.elevation - deltaY * 0.004),
+    };
     updateCameraOnly();
   }
 });
@@ -417,12 +452,23 @@ element.stage.addEventListener("pointercancel", finishPointer);
 element.stage.addEventListener("wheel", (event) => {
   if ((event.target as Element).closest(".render-panel")) return;
   event.preventDefault();
-  state.camera.zoom = clamp(state.camera.zoom * (event.deltaY > 0 ? 0.93 : 1.07), 0.76, 1.35);
+  cameraView = {
+    ...cameraView,
+    zoom: clamp(
+      cameraView.zoom * (event.deltaY > 0 ? 0.93 : 1.07),
+      CAMERA_ZOOM_MIN,
+      maxZoomForStage(),
+    ),
+  };
   updateCameraOnly();
 }, { passive: false });
 
-window.addEventListener("resize", () => runtime.resize());
-if ("ResizeObserver" in window) new ResizeObserver(() => runtime.resize()).observe(element.stage);
+const resizeCamera = (): void => {
+  runtime.resize();
+  reconcileCameraZoom();
+};
+window.addEventListener("resize", resizeCamera);
+if ("ResizeObserver" in window) new ResizeObserver(resizeCamera).observe(element.stage);
 window.addEventListener("beforeunload", () => runtime.dispose(), { once: true });
 
 update();
@@ -449,6 +495,53 @@ function saveRenderSettings(settings: RenderSettings): void {
   } catch {
     // Rendering preferences are optional; the game save remains independent.
   }
+}
+
+function loadCameraView(fallbackZoom: number): CameraViewState {
+  const size = stageSize();
+  try {
+    const parsed = JSON.parse(localStorage.getItem(CAMERA_VIEW_KEY) ?? "{}") as Partial<CameraViewState>;
+    const zoom = Number(parsed.zoom);
+    const elevation = Number(parsed.elevation);
+    return {
+      zoom: clamp(
+        Number.isFinite(zoom) ? zoom : fallbackZoom,
+        CAMERA_ZOOM_MIN,
+        maxCanvasCameraZoom(size.width, size.height),
+      ),
+      elevation: clampCameraElevation(
+        Number.isFinite(elevation) ? elevation : CAMERA_DEFAULT_ELEVATION,
+      ),
+    };
+  } catch {
+    return {
+      zoom: clamp(fallbackZoom, CAMERA_ZOOM_MIN, maxCanvasCameraZoom(size.width, size.height)),
+      elevation: CAMERA_DEFAULT_ELEVATION,
+    };
+  }
+}
+
+function saveCameraView(view: CameraViewState): void {
+  try {
+    localStorage.setItem(CAMERA_VIEW_KEY, JSON.stringify(view));
+  } catch {
+    // Camera composition is optional view state and must not affect the game save.
+  }
+}
+
+function maxZoomForStage(): number {
+  const size = stageSize();
+  return element.gpuCanvas.classList.contains("is-active")
+    ? maxCameraZoom(size.width, size.height)
+    : maxCanvasCameraZoom(size.width, size.height);
+}
+
+function stageSize(): { width: number; height: number } {
+  const rect = element.stage.getBoundingClientRect();
+  return {
+    width: Math.max(1, rect.width || element.stage.clientWidth || 1),
+    height: Math.max(1, rect.height || element.stage.clientHeight || 1),
+  };
 }
 
 function targetChip(crop: CropId, count: number): HTMLElement {
