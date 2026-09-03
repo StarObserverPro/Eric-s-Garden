@@ -12,14 +12,18 @@ import {
   TERRAIN_OUTER_Y,
   terrainHeightAt,
 } from "../src/render/vgpu/hardscape-geometry";
+import {
+  TERRAIN_MAX_X,
+  TERRAIN_MAX_Z,
+} from "../src/render/vgpu/terrain-surface";
 
-test("hardscape bakes adaptive terrain, outward stones and stable rustic fence into one static mesh", () => {
+test("hardscape bakes near garden and sparse distant terrain into one static mesh", () => {
   const hardscape = createHardscapeGeometryData();
   expect(hardscape.stats.stoneCount).toBe(HARDSCAPE_STONE_COUNT);
   expect(hardscape.stats.fencePostCount).toBe(HARDSCAPE_FENCE_POST_COUNT);
   expect(hardscape.stats.fenceRailSegmentCount).toBe(HARDSCAPE_FENCE_RAIL_SEGMENT_COUNT);
-  expect(hardscape.stats.terrainTriangles).toBeGreaterThan(4_000);
-  expect(hardscape.stats.terrainTriangles).toBeLessThan(7_000);
+  expect(hardscape.stats.terrainTriangles).toBeGreaterThan(14_000);
+  expect(hardscape.stats.terrainTriangles).toBeLessThan(17_000);
   expect(hardscape.stats.gapTriangles).toBe(hardscape.stats.terrainTriangles);
   expect(hardscape.stats.stoneTriangles).toBe(HARDSCAPE_STONE_COUNT * 40);
   expect(hardscape.stats.fenceTriangles).toBe(912);
@@ -29,10 +33,10 @@ test("hardscape bakes adaptive terrain, outward stones and stable rustic fence i
   expect(hardscape.data.length).toBe(hardscape.stats.vertexCount * HARDSCAPE_VERTEX_STRIDE_FLOATS);
 });
 
-test("terrain spends more triangles around the bed field while preserving a smooth analytic surface", () => {
+test("terrain spends fine polygons around the beds and aggressively coarsens the distant country", () => {
   const { data, stats } = createHardscapeGeometryData();
-  let centralTriangles = 0;
-  let outerTriangles = 0;
+  const nearAreas: number[] = [];
+  const farAreas: number[] = [];
   let smoothNormalTriangles = 0;
 
   for (let triangle = 0; triangle < stats.terrainTriangles; triangle += 1) {
@@ -47,8 +51,12 @@ test("terrain spends more triangles around the bed field while preserving a smoo
     });
     const centerX = (vertices[0]!.x + vertices[1]!.x + vertices[2]!.x) / 3;
     const centerZ = (vertices[0]!.z + vertices[1]!.z + vertices[2]!.z) / 3;
-    if (Math.abs(centerX) < 3.2 && Math.abs(centerZ) < 2.55) centralTriangles += 1;
-    if (Math.abs(centerX) > 4.1 || Math.abs(centerZ) > 3.25) outerTriangles += 1;
+    const area = Math.abs(
+      (vertices[1]!.x - vertices[0]!.x) * (vertices[2]!.z - vertices[0]!.z)
+      - (vertices[1]!.z - vertices[0]!.z) * (vertices[2]!.x - vertices[0]!.x),
+    ) * 0.5;
+    if (Math.abs(centerX) < 3.2 && Math.abs(centerZ) < 2.55) nearAreas.push(area);
+    if (Math.hypot(centerX, centerZ) > 30) farAreas.push(area);
 
     const a = vertices[0]!.normal;
     const b = vertices[1]!.normal;
@@ -61,8 +69,13 @@ test("terrain spends more triangles around the bed field while preserving a smoo
     if (normalSpread > 0.001) smoothNormalTriangles += 1;
   }
 
-  expect(centralTriangles).toBeGreaterThan(outerTriangles * 2);
-  expect(smoothNormalTriangles).toBeGreaterThan(stats.terrainTriangles * 0.75);
+  const average = (values: readonly number[]): number => (
+    values.reduce((sum, value) => sum + value, 0) / Math.max(1, values.length)
+  );
+  expect(nearAreas.length).toBeGreaterThan(1_000);
+  expect(farAreas.length).toBeGreaterThan(100);
+  expect(average(farAreas)).toBeGreaterThan(average(nearAreas) * 50);
+  expect(smoothNormalTriangles).toBeGreaterThan(stats.terrainTriangles * 0.45);
 
   const inner = terrainHeightAt(0, 0);
   const outer = terrainHeightAt(5.5, 4.0);
@@ -71,6 +84,11 @@ test("terrain spends more triangles around the bed field while preserving a smoo
   expect(outer).toBeGreaterThan(TERRAIN_OUTER_Y - 0.04);
   expect(outer).toBeLessThan(TERRAIN_OUTER_Y + 0.04);
   expect(inner - outer).toBeGreaterThan(0.14);
+
+  // Distant terrain rises into actual world-space skyline geometry only after
+  // the playable garden has ended.
+  expect(terrainHeightAt(48, 0)).toBeGreaterThan(1.0);
+  expect(terrainHeightAt(0, 48)).toBeGreaterThan(1.0);
 });
 
 test("stepping stones use deterministic constrained random placement rather than mirrored rows", () => {
@@ -104,6 +122,8 @@ test("hardscape vertices remain finite, bounded and carry all three material fam
   const kinds = new Set<number>();
   let minY = Number.POSITIVE_INFINITY;
   let maxY = Number.NEGATIVE_INFINITY;
+  let maxAbsX = 0;
+  let maxAbsZ = 0;
 
   for (let offset = 0; offset < data.length; offset += HARDSCAPE_VERTEX_STRIDE_FLOATS) {
     const x = data[offset]!;
@@ -116,18 +136,22 @@ test("hardscape vertices remain finite, bounded and carry all three material fam
     for (const value of [x, y, z, nx, ny, nz, kind, data[offset + 7]!, data[offset + 8]!]) {
       expect(Number.isFinite(value)).toBe(true);
     }
-    expect(Math.abs(x)).toBeLessThanOrEqual(5.75);
-    expect(Math.abs(z)).toBeLessThanOrEqual(4.35);
+    expect(Math.abs(x)).toBeLessThanOrEqual(TERRAIN_MAX_X + 0.001);
+    expect(Math.abs(z)).toBeLessThanOrEqual(TERRAIN_MAX_Z + 0.001);
     const normalLength = Math.hypot(nx, ny, nz);
     expect(normalLength).toBeGreaterThan(0.98);
     expect(normalLength).toBeLessThan(1.02);
     minY = Math.min(minY, y);
     maxY = Math.max(maxY, y);
+    maxAbsX = Math.max(maxAbsX, Math.abs(x));
+    maxAbsZ = Math.max(maxAbsZ, Math.abs(z));
     kinds.add(Math.round(kind));
   }
 
+  expect(maxAbsX).toBeGreaterThan(70);
+  expect(maxAbsZ).toBeGreaterThan(58);
   expect(minY).toBeGreaterThan(-0.46);
-  expect(maxY).toBeGreaterThan(0.74);
-  expect(maxY).toBeLessThan(0.84);
+  expect(maxY).toBeGreaterThan(2.0);
+  expect(maxY).toBeLessThan(6.5);
   expect([...kinds].sort()).toEqual([0, 1, 2]);
 });
