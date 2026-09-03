@@ -29,6 +29,17 @@ fn hash21(value: vec2f) -> f32 {
   return fract(sin(dot(value, vec2f(127.1, 311.7))) * 43758.5453);
 }
 
+fn value_noise(value: vec2f) -> f32 {
+  let base = floor(value);
+  let fraction = fract(value);
+  let blend = fraction * fraction * (3.0 - 2.0 * fraction);
+  let a = hash21(base);
+  let b = hash21(base + vec2f(1.0, 0.0));
+  let c = hash21(base + vec2f(0.0, 1.0));
+  let d = hash21(base + vec2f(1.0, 1.0));
+  return mix(mix(a, b, blend.x), mix(c, d, blend.x), blend.y);
+}
+
 fn cloud_shadow(world: vec3f) -> f32 {
   let wave =
     sin(world.x * 0.48 + world.z * 0.19 + uniforms.scene.x * 0.08) +
@@ -69,52 +80,62 @@ fn fs_main(input: VertexOut) -> @location(0) vec4f {
   var base = vec3f(0.37, 0.30, 0.21);
 
   if (kind == 0u) {
-    let broad = hash21(floor(input.world.xz * 4.8) + vec2f(seed * 17.0, seed * 5.0));
-    let grain = hash21(floor(input.world.xz * 19.0) + vec2f(seed * 37.0, seed * 19.0));
-    let fleck = hash21(floor(input.world.xz * 34.0) + vec2f(seed * 53.0, seed * 31.0));
+    // Large and medium variations are continuous in world space. The previous
+    // floor(hash) fields revealed each adaptive terrain cell as a square tile.
+    let broad = value_noise(input.world.xz * 0.68 + vec2f(3.7, -5.1));
+    let medium = value_noise(input.world.xz * 2.65 + vec2f(-7.3, 4.6));
+    let grain = value_noise(input.world.xz * 8.4 + vec2f(11.2, -2.7));
+    let fleck = hash21(floor(input.world.xz * 38.0) + vec2f(17.0, 29.0));
     let bed_distance = nearest_bed_edge_distance(input.world.xz);
-    let earth_mix = 1.0 - smoothstep(0.34, 1.05, bed_distance);
+    let earth_mix = 1.0 - smoothstep(0.30, 1.22, bed_distance);
+    let soil_apron = 1.0 - smoothstep(0.04, 0.34, bed_distance);
 
     let meadow = mix(
       vec3f(0.15, 0.285, 0.070),
       vec3f(0.335, 0.465, 0.145),
-      0.26 + broad * 0.58 + grain * 0.08,
+      0.18 + broad * 0.58 + medium * 0.15,
     );
     let packed = mix(
       vec3f(0.30, 0.225, 0.135),
       vec3f(0.47, 0.355, 0.205),
-      0.18 + broad * 0.56 + grain * 0.15,
+      0.16 + broad * 0.43 + medium * 0.24 + grain * 0.08,
     );
     base = mix(meadow, packed, earth_mix);
 
-    let dry_thatch = smoothstep(0.78, 0.98, fleck) * (1.0 - earth_mix * 0.72);
-    base += vec3f(0.055, 0.038, 0.010) * dry_thatch;
-    let tiny_stone = smoothstep(0.945, 0.995, grain) * earth_mix;
-    base = mix(base, vec3f(0.43, 0.42, 0.35), tiny_stone * 0.26);
-    base *= 0.94 + normal.y * 0.06;
+    // A narrow soil-colored apron visually continues the bed shoulder into the
+    // packed aisle while the geometry itself now shares the same terrain datum.
+    let shoulder_loam = mix(
+      vec3f(0.29, 0.175, 0.085),
+      vec3f(0.43, 0.275, 0.135),
+      0.30 + broad * 0.42 + medium * 0.16,
+    );
+    base = mix(base, shoulder_loam, soil_apron * 0.52);
+
+    let dry_thatch = smoothstep(0.86, 0.985, fleck) * (1.0 - earth_mix * 0.76);
+    base += vec3f(0.050, 0.034, 0.009) * dry_thatch;
+    let tiny_stone = smoothstep(0.91, 0.99, grain) * earth_mix;
+    base = mix(base, vec3f(0.43, 0.42, 0.35), tiny_stone * 0.15);
+    base *= 0.95 + normal.y * 0.05;
   } else if (kind == 1u) {
-    let mineral = hash21(floor(input.world.xz * 10.0) + vec2f(seed * 29.0, seed * 43.0));
-    let fleck = hash21(floor(input.world.xz * 31.0) + vec2f(seed * 11.0, seed * 67.0));
+    let mineral = value_noise(input.world.xz * 4.6 + vec2f(seed * 7.0, seed * -5.0));
+    let fleck = value_noise(input.world.xz * 13.5 + vec2f(seed * 17.0, seed * 9.0));
     base = mix(vec3f(0.44, 0.43, 0.39), vec3f(0.67, 0.61, 0.50), mineral * 0.68);
-    base = mix(base, vec3f(0.30, 0.32, 0.30), smoothstep(0.92, 0.99, fleck) * 0.28);
+    base = mix(base, vec3f(0.30, 0.32, 0.30), smoothstep(0.82, 0.96, fleck) * 0.20);
     if (part > 0.5) {
-      base *= 0.78;
+      base *= 0.82;
     }
-    let moss_noise = hash21(floor(input.world.xz * 5.0) + vec2f(seed * 71.0, seed * 13.0));
-    let moss = smoothstep(0.80, 0.98, moss_noise) * smoothstep(0.55, 0.92, normal.y);
-    base = mix(base, vec3f(0.33, 0.39, 0.23), moss * 0.34);
+    let moss_noise = value_noise(input.world.xz * 1.9 + vec2f(seed * 5.0, seed * 11.0));
+    let moss = smoothstep(0.72, 0.93, moss_noise) * smoothstep(0.55, 0.92, normal.y);
+    base = mix(base, vec3f(0.33, 0.39, 0.23), moss * 0.30);
   } else {
     let grain_axis = select(input.world.y * 9.0, input.world.x * 4.5 + input.world.z * 4.5, part > 0.5);
     let long_grain = 0.5 + 0.5 * sin(grain_axis + seed * 21.0);
-    let knot = smoothstep(
-      0.90,
-      0.987,
-      hash21(floor(input.world.xz * 8.0 + input.world.yy * 5.0) + vec2f(seed * 31.0, seed * 47.0)),
-    );
+    let knot_noise = value_noise(vec2f(input.world.x + input.world.z, input.world.y) * 5.4 + seed * 13.0);
+    let knot = smoothstep(0.84, 0.965, knot_noise);
     base = mix(vec3f(0.28, 0.17, 0.088), vec3f(0.50, 0.31, 0.14), long_grain * 0.54);
-    base = mix(base, vec3f(0.19, 0.12, 0.065), knot * 0.36);
+    base = mix(base, vec3f(0.19, 0.12, 0.065), knot * 0.30);
     if (part > 0.5) {
-      base *= 0.93;
+      base *= 0.94;
     }
   }
 
