@@ -1,6 +1,7 @@
 {
-  "name": "Eric 的秘密菜园 R2",
+  "name": "Eric 的秘密菜园",
   "short_name": "秘密菜园",
+  "description": "照料、采摘、观察天气和读表格的小菜园。",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#f7f2df",

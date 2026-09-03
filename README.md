@@ -1,72 +1,98 @@
-# Eric 的秘密菜园 R2
+# Eric 的秘密菜园
 
-这是给 Eric 的小菜园升级版。当前 R2 刻意保持为一个**零依赖静态站点**：没有账号、没有数据库、没有后端，进度直接保存在浏览器 `localStorage`。因此非常适合直接放到 ChatGPT Sites、Vercel、Netlify、Cloudflare Pages、GitHub Pages 或任何能托管静态文件的地方。
+A child-facing garden game and a deliberately small vgpu proving ground.
 
-## R2 做了什么
+The current slice keeps the original five-level R2 game intact while adding the non-vegetable parts of Phase 1 and Phase 2:
 
-- 保留原版核心循环：**播种 → 浇水 → 生长 → 必要时喷药 → 采摘 → 看统计表**。
-- 5 个短关卡，第一关目标保持原版的 `3 胡萝卜 / 4 番茄 / 1 玉米 / 2 南瓜`。
-- 第 3 关解锁生菜，第 5 关解锁草莓。
-- 菜园画面改为程序绘制的轻量 2.5D：可拖动旋转、双指/滚轮缩放、点菜地互动。
-- 每种植物有 4 个生长阶段，不需要图片素材或 3D 模型。
-- 增加“菜园小本本”、星星、天气、小虫事件和关卡完成反馈。
-- 统计表继续承担“读表格”的学习目的，并附非常短的观察题。
-- 增加中文语音朗读按钮（调用浏览器原生 Web Speech API；不需要服务器）。
-- 手机 / 平板优先响应式布局。
+- procedural soil connected to the existing watering state;
+- a low-poly grass island, stone path and wooden fence;
+- instanced grass with sparse wildflowers and vertex-shader wind;
+- simple sky, sunlight, cloud shadow and level-driven weather;
+- 500 / 1,500 / 4,000 vegetation tiers and explicit DPR caps;
+- a playable Canvas 2D fallback for missing WebGPU, initialization failure, render failure and device loss.
 
-## 文件
+Vegetable geometry is intentionally deferred. In the vgpu view, the original crop emoji are temporarily projected from the same camera and scene snapshot. They own no game state and are the narrow replacement seam for the vegetable thread.
 
-```text
-.
-├── AGENTS.md            # 轻量仓库治理与注意力入口
-├── index.html           # 页面结构
-├── styles.css           # 全部视觉与响应式布局
-├── app.js               # 游戏状态、Canvas 菜园、触控、存档
-├── favicon.svg
-├── site.webmanifest
-├── package.json         # 当前 R2 仅提供本地预览命令，无依赖
-├── UPGRADE_NOTES.md
-└── docs/
-    ├── PROJECT_SCOPE_R1.md  # 产品、场景与 vgpu 分阶段 Scope
-    └── work/README.md       # 只在实际施工时使用的短工作包模板
-```
+## Run locally
 
-## 本地运行
-
-当前 R2 不需要 `npm install`。
+Node 22 is required.
 
 ```bash
+npm install
 npm run dev
 ```
 
-然后打开 `http://localhost:4173`。
+Open the Vite URL, normally `http://localhost:4173`.
 
-也可以直接用任何静态服务器打开本目录。
+## Verify
 
-## 部署 / 交给妈妈
-
-最省事的方式是新建一个空 GitHub repo，把本目录全部文件放到 repo 根目录；部署平台的 Output / Build 设置保持为空或选择“静态站点”即可。
-
-如果目标平台要求构建命令：当前 R2 留空。发布目录：仓库根目录 `.`。
-
-## 存档
-
-浏览器存档键：
-
-```text
-eric-secret-garden-r2
+```bash
+npm run check
 ```
 
-右上角 `↻` 可以清空并重新从第 1 关开始。
+This runs:
 
-## 下一阶段：vgpu / WebGPU 试验场
+1. `vgpu check` for the WGSL modules;
+2. Vitest coverage of the R2 game contract and renderer-neutral snapshot;
+3. a vgpu mock compile/record test for the procedural soil shader;
+4. a Dawn-backed `vgpu/node` frame and readback;
+5. strict TypeScript plus the production Vite build.
 
-后续方向不是把水晶花园整套缩小搬入，而是把较高的单屏视觉与优化预算集中到一个小型 garden diorama：中央菜畦、草花边缘、矮栅栏/石路和简单天空先构成基础世界，再分阶段验证程序土壤、湿润、生长、instancing、风和天气。
+## Static production output
 
-详细范围见 [`docs/PROJECT_SCOPE_R1.md`](docs/PROJECT_SCOPE_R1.md)。未来施工先读 [`AGENTS.md`](AGENTS.md)，只有明确激活的任务才在 `docs/work/` 创建短工作包。
+```bash
+npm run build
+```
 
-该阶段可以引入固定版本的 TypeScript、Vite、vgpu 和 WGSL **构建时依赖**，但生产输出仍保持为无需后端的静态站点。当前 Canvas 2D 路径先作为兼容回退和视觉基线保留。
+The deployable site is `dist/`. Runtime production remains static: no backend, database, CDN model, image service or server function is required.
 
-## 设计边界
+## Renderer ownership
 
-R2 不是水晶花园的缩小复制品。它只借用“花园是一块可以被照料、观察、积累的地方”这个核心；没有经济系统、背包、邮件、复杂制作链、服务器存档或多地图，避免把 6 岁孩子的操作负担做大。
+```text
+DOM / CSS UI
+  -> game model
+  -> GardenSceneSnapshot
+  -> RenderRuntime                  (the only requestAnimationFrame owner)
+      -> VgpuRenderer               (preferred when supported)
+      -> Canvas2DRenderer           (playable fallback)
+```
+
+Only one renderer is visible and updated at a time. The vgpu path owns one `Gpu` context and uses manual `frame(gpu, callback)` submissions inside the shared runtime loop. Raw WebGPU access is restricted to `src/render/vgpu/raw/`.
+
+## Scene layers in the vgpu path
+
+- **Sky pass:** weather gradient, sun glow and moving cloud cover.
+- **World pass:**
+  - static render bundle: ground, path and fence;
+  - procedural soil bundle: twelve bed instances with wetness uniforms;
+  - vegetation bundle: one instanced grass/wildflower draw with GPU wind.
+- **Blit pass:** offscreen depth target to the canvas surface.
+
+The collapsed **画面** panel in the garden reports the active renderer, FPS, CPU frame time, passes, draws, instances, resources and effective DPR. Rendering preferences are stored separately from the game save.
+
+## Persistence
+
+- Game save: `eric-secret-garden-r2`
+- Rendering preferences: `eric-secret-garden-render-r1`
+
+The first key and its gameplay meaning are preserved from R2.
+
+## Important paths
+
+```text
+src/game/                  one serializable game model
+src/scene/                 renderer-neutral scene snapshot
+src/render/contract.ts     renderer and quality contracts
+src/render/runtime.ts      one active renderer / one frame owner
+src/render/canvas2d/       playable fallback
+src/render/vgpu/           vgpu scene, geometry and WGSL
+src/render/vgpu/raw/       narrow raw WebGPU adapters only
+src/diagnostics/           render metrics panel binding
+tests/                     game, snapshot, mock and Node checks
+docs/work/                 active construction packet
+docs/experience/           reusable implementation lessons
+```
+
+## Scope boundary
+
+This repository is not becoming a general game engine. The current work does **not** add vegetable meshes or shaders, alter crop balance or growth rules, create a second scene graph, or introduce accounts, multiplayer, physics, an editor or a backend.

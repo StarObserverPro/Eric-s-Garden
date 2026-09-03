@@ -1,0 +1,67 @@
+name: Verify
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install pinned dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Install the verified portable CPU renderer
+        run: npx vgpu install-software-renderer
+      - name: Prove the headless renderer is healthy
+        run: npx vgpu doctor --pretty
+      - name: Shader, model, mock, Node and production checks
+        run: npm run check
+      - name: Capture the playable Canvas fallback
+        run: |
+          mkdir -p browser-evidence
+          npx vite preview --host 127.0.0.1 --port 4173 >browser-evidence/vite.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          for attempt in {1..40}; do
+            if curl -fsS http://127.0.0.1:4173/ >/dev/null; then
+              break
+            fi
+            sleep 0.25
+          done
+          curl -fsS http://127.0.0.1:4173/ >/dev/null
+          BROWSER="$(command -v google-chrome || command -v chromium || command -v chromium-browser)"
+          test -n "$BROWSER"
+          "$BROWSER" \
+            --headless=new \
+            --no-sandbox \
+            --disable-gpu \
+            --hide-scrollbars \
+            --window-size=1440,1100 \
+            --virtual-time-budget=5000 \
+            --screenshot=browser-evidence/garden-fallback.png \
+            --dump-dom \
+            http://127.0.0.1:4173/ >browser-evidence/garden-dom.html
+          test -s browser-evidence/garden-fallback.png
+          grep -q "Eric 的秘密菜园" browser-evidence/garden-dom.html
+          grep -q "本轮只升级土壤、边缘和天气" browser-evidence/garden-dom.html
+      - name: Keep build and browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verify-evidence
+          path: |
+            package-lock.json
+            dist
+            browser-evidence
+          if-no-files-found: warn
+          retention-days: 7
