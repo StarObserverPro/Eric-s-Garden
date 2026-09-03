@@ -25,7 +25,11 @@ jobs:
       - name: Prove the headless renderer is healthy
         run: npx vgpu doctor --pretty
       - name: Shader, model, mock, Node and production checks
-        run: npm run check
+        shell: bash
+        run: |
+          mkdir -p browser-evidence
+          set -o pipefail
+          npm run check 2>&1 | tee browser-evidence/check.log
       - name: Capture deterministic soil evidence
         run: |
           mkdir -p browser-evidence
