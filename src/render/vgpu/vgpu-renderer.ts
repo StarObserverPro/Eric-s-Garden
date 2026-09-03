@@ -21,7 +21,7 @@ import {
 } from "vgpu";
 import { perspectiveCamera } from "vgpu/scene";
 
-import { CROPS } from "../../game/model";
+import type { CropId } from "../../game/model";
 import type { GardenSceneSnapshot, Vec3, WeatherProfile } from "../../scene/snapshot";
 import {
   INSTANCE_TIERS,
@@ -31,6 +31,14 @@ import {
   type RendererMetrics,
   type RuntimeQualityProfile,
 } from "../contract";
+import {
+  CROP_INSTANCE_COUNT,
+  CROP_VERTEX_STRIDE_FLOATS,
+  advanceVisualStage,
+  createCropGeometryData,
+  cropKindFor,
+  cropMarkerHeight,
+} from "./crop-geometry";
 import { createBoxVertices, createVegetationVertices } from "./geometry";
 import { createHardscapeLayer, type HardscapeLayer } from "./hardscape";
 import {
@@ -41,6 +49,7 @@ import {
 import { observeDeviceLoss } from "./raw/device-loss";
 import { createSoilGeometryData } from "./soil-geometry";
 import blitShader from "./shaders/blit.wgsl";
+import cropShader from "./shaders/crop.wgsl";
 import gardenShader from "./shaders/garden.wgsl";
 import skyShader from "./shaders/sky.wgsl";
 import soilShader from "./shaders/soil.wgsl";
@@ -48,7 +57,6 @@ import vegetationShader from "./shaders/vegetation.wgsl";
 
 interface CropMarker {
   readonly root: HTMLSpanElement;
-  readonly glyph: HTMLSpanElement;
   readonly badge: HTMLSpanElement;
 }
 
@@ -57,15 +65,18 @@ interface Generation {
   readonly sceneTarget: Target;
   readonly boxGeometry: Geometry;
   readonly soilGeometry: Geometry;
+  readonly cropGeometry: Geometry;
   readonly vegetationGeometry: Geometry;
   readonly ground: Draw;
   readonly soil: Draw;
+  readonly crop: Draw;
   readonly hardscape: HardscapeLayer;
   readonly vegetation: Draw;
   readonly sky: Effect;
   readonly blit: Effect;
   readonly staticBundle: Bundle;
   readonly soilBundle: Bundle;
+  readonly cropBundle: Bundle;
   readonly vegetationBundles: InstanceTierBundles;
 }
 
@@ -119,6 +130,9 @@ export class VgpuRenderer implements GardenRenderer {
   #snapshot: GardenSceneSnapshot;
   #generation: Generation;
   #qualityProfile: RuntimeQualityProfile;
+  #visualStages: number[];
+  #visualCrops: (CropId | null)[];
+  #lastRenderTimeMs: number | undefined;
   #projectedPlots: ProjectedPlot[] = [];
   #disposed = false;
   #fatalError: Error | undefined;
@@ -146,6 +160,8 @@ export class VgpuRenderer implements GardenRenderer {
       vegetationInstances: settings.instances,
       pressure: 0,
     };
+    this.#visualStages = snapshot.plots.map((plot) => plot.crop && !plot.harvested ? plot.stage : 0);
+    this.#visualCrops = snapshot.plots.map((plot) => plot.crop && !plot.harvested ? plot.crop : null);
     this.#markers = createCropMarkers(overlay);
     this.#releaseError = gpu.onError((error: unknown) => {
       this.#fatalError = asError(error);
@@ -177,6 +193,16 @@ export class VgpuRenderer implements GardenRenderer {
   }
 
   setSnapshot(snapshot: GardenSceneSnapshot): void {
+    for (let index = 0; index < CROP_INSTANCE_COUNT; index += 1) {
+      const plot = snapshot.plots[index];
+      const nextCrop = plot?.crop && !plot.harvested ? plot.crop : null;
+      const nextStage = nextCrop ? plot?.stage ?? 0 : 0;
+      const currentStage = this.#visualStages[index] ?? 0;
+      if (nextCrop !== this.#visualCrops[index] || nextStage < currentStage) {
+        this.#visualStages[index] = nextStage;
+      }
+      this.#visualCrops[index] = nextCrop;
+    }
     this.#snapshot = snapshot;
   }
 
@@ -197,6 +223,12 @@ export class VgpuRenderer implements GardenRenderer {
     if (this.#disposed) return;
     if (this.#fatalError) throw this.#fatalError;
     this.#requestGenerationIfNeeded();
+
+    const deltaSeconds = this.#lastRenderTimeMs === undefined
+      ? 0
+      : Math.min(0.12, Math.max(0, (timeMs - this.#lastRenderTimeMs) * 0.001));
+    this.#lastRenderTimeMs = timeMs;
+    this.#advanceVisualStages(deltaSeconds);
 
     const snapshot = this.#snapshot;
     const generation = this.#generation;
@@ -230,6 +262,7 @@ export class VgpuRenderer implements GardenRenderer {
     setWorldUniforms(generation.ground, shared, snapshot, 0);
     generation.hardscape.set(shared);
     setVegetationUniforms(generation.vegetation, shared);
+    setCropUniforms(generation.crop, shared, snapshot, this.#visualStages);
     setSoilUniforms(generation.soil, {
       ...shared,
       scene: [
@@ -281,6 +314,7 @@ export class VgpuRenderer implements GardenRenderer {
         (pass: FramePass) => pass.bundles(
           generation.staticBundle,
           generation.soilBundle,
+          generation.cropBundle,
           vegetationBundle,
         ),
       );
@@ -310,9 +344,9 @@ export class VgpuRenderer implements GardenRenderer {
     return {
       kind: this.kind,
       passes: 3,
-      drawCalls: 6,
-      instances: this.#qualityProfile.vegetationInstances + 3,
-      resources: 14 + this.#generation.vegetationBundles.size,
+      drawCalls: 7,
+      instances: this.#qualityProfile.vegetationInstances + CROP_INSTANCE_COUNT + 3,
+      resources: 16 + this.#generation.vegetationBundles.size,
       dpr: Math.max(1, this.#canvas.width / Math.max(1, this.#canvas.clientWidth)),
     };
   }
@@ -327,6 +361,14 @@ export class VgpuRenderer implements GardenRenderer {
     this.#gpu.dispose();
     this.#overlay.replaceChildren();
     this.#projectedPlots = [];
+  }
+
+  #advanceVisualStages(deltaSeconds: number): void {
+    for (let index = 0; index < CROP_INSTANCE_COUNT; index += 1) {
+      const plot = this.#snapshot.plots[index];
+      const target = plot?.crop && !plot.harvested ? plot.stage : 0;
+      this.#visualStages[index] = advanceVisualStage(this.#visualStages[index] ?? target, target, deltaSeconds);
+    }
   }
 
   #requestGenerationIfNeeded(): void {
@@ -379,11 +421,11 @@ export class VgpuRenderer implements GardenRenderer {
         continue;
       }
 
-      const stage = Math.max(1, plot.stage);
+      const visualStage = this.#visualStages[index] ?? plot.stage;
       const plantPoint = project(
         viewProjection,
         plot.position[0],
-        0.42 + stage * 0.12,
+        plot.position[1] + cropMarkerHeight(plot.crop, visualStage),
         plot.position[2],
         width,
         height,
@@ -392,9 +434,8 @@ export class VgpuRenderer implements GardenRenderer {
       marker.root.style.left = `${plantPoint.x}px`;
       marker.root.style.top = `${plantPoint.y}px`;
       marker.root.style.zIndex = String(Math.round(plantPoint.y));
-      marker.root.style.setProperty("--crop-scale", String((0.76 + stage * 0.12) * zoom));
-      marker.glyph.textContent = stage < 3 ? "🌱" : CROPS[plot.crop][1];
-      marker.badge.textContent = plot.pest ? "🐛" : stage >= 4 ? "✨" : "";
+      marker.root.style.setProperty("--crop-scale", String(zoom));
+      marker.badge.textContent = plot.pest ? "🐛" : plot.stage >= 4 ? "✨" : "";
     }
   }
 }
@@ -413,6 +454,7 @@ async function createGeneration(
   });
   let boxGeometry: Geometry | undefined;
   let soilGeometry: Geometry | undefined;
+  let cropGeometry: Geometry | undefined;
   let vegetationGeometry: Geometry | undefined;
   let hardscape: HardscapeLayer | undefined;
 
@@ -448,6 +490,25 @@ async function createGeneration(
         },
       ],
     });
+    const cropData = createCropGeometryData();
+    cropGeometry = geometry(gpu, {
+      label: `garden-crops-${cropData.stats.triangleCount}-triangles-per-superset`,
+      buffers: [
+        {
+          data: cropData.data.buffer,
+          stride: CROP_VERTEX_STRIDE_FLOATS * 4,
+          attributes: {
+            local_position: "float32x3",
+            local_normal: "float32x3",
+            anchor: "float32x3",
+            crop_kind: "float32",
+            material_kind: "float32",
+            birth: "float32",
+            flex: "float32",
+          },
+        },
+      ],
+    });
     vegetationGeometry = geometry(gpu, {
       label: "garden-vegetation-segmented-tufts",
       buffers: [
@@ -475,6 +536,13 @@ async function createGeneration(
       geometry: soilGeometry,
       cull: "none",
       label: "garden-soil-high-density",
+    });
+    const crop = draw(gpu, {
+      shader: cropShader,
+      geometry: cropGeometry,
+      instances: CROP_INSTANCE_COUNT,
+      cull: "none",
+      label: `garden-crops-${CROP_INSTANCE_COUNT}`,
     });
     const vegetation = draw(gpu, {
       shader: vegetationShader,
@@ -509,6 +577,7 @@ async function createGeneration(
     };
     setWorldUniforms(ground, shared, snapshot, 0);
     setVegetationUniforms(vegetation, shared);
+    setCropUniforms(crop, shared, snapshot, snapshot.plots.map((plot) => plot.crop && !plot.harvested ? plot.stage : 0));
     setSoilUniforms(soil, {
       ...shared,
       scene: [0, snapshot.weather.cloudiness, snapshot.weather.sunlight, snapshot.weather.rain],
@@ -536,6 +605,7 @@ async function createGeneration(
     await Promise.all([
       ground.compile(sceneTarget),
       soil.compile(sceneTarget),
+      crop.compile(sceneTarget),
       vegetation.compile(sceneTarget),
       sky.compile(sceneTarget),
       blit.compile(output),
@@ -554,6 +624,11 @@ async function createGeneration(
       { target: sceneTarget, label: "garden-soil" },
       (recorded: BundleRecorder) => recorded.draw(soil),
     );
+    const cropBundle = bundle(
+      gpu,
+      { target: sceneTarget, label: "garden-crops" },
+      (recorded: BundleRecorder) => recorded.draw(crop),
+    );
     const vegetationTiers: InstanceTier[] = INSTANCE_TIERS.filter(
       (tier) => tier <= settings.instances,
     );
@@ -570,20 +645,24 @@ async function createGeneration(
       sceneTarget,
       boxGeometry,
       soilGeometry,
+      cropGeometry,
       vegetationGeometry,
       ground,
       soil,
+      crop,
       hardscape: hardscapeLayer,
       vegetation,
       sky,
       blit,
       staticBundle,
       soilBundle,
+      cropBundle,
       vegetationBundles,
     };
   } catch (error) {
     bestEffort(() => boxGeometry?.destroy());
     bestEffort(() => soilGeometry?.destroy());
+    bestEffort(() => cropGeometry?.destroy());
     bestEffort(() => vegetationGeometry?.destroy());
     bestEffort(() => hardscape?.destroy());
     bestEffort(() => destroyTarget(sceneTarget));
@@ -626,6 +705,50 @@ function setVegetationUniforms(drawable: Draw, shared: SharedWorldUniforms): voi
   });
 }
 
+function setCropUniforms(
+  drawable: Draw,
+  shared: SharedWorldUniforms,
+  snapshot: GardenSceneSnapshot,
+  visualStages: readonly number[],
+): void {
+  const cropValues = Array.from({ length: CROP_INSTANCE_COUNT }, (_, index) => {
+    const plot = snapshot.plots[index];
+    return plot?.crop && !plot.harvested ? cropKindFor(plot.crop) : -1;
+  });
+  const stageValues = Array.from({ length: CROP_INSTANCE_COUNT }, (_, index) => {
+    const plot = snapshot.plots[index];
+    return plot?.crop && !plot.harvested ? visualStages[index] ?? plot.stage : 0;
+  });
+  const rootX = Array.from({ length: CROP_INSTANCE_COUNT }, (_, index) => snapshot.plots[index]?.position[0] ?? 0);
+  const rootY = Array.from({ length: CROP_INSTANCE_COUNT }, (_, index) => snapshot.plots[index]?.position[1] ?? 0);
+  const rootZ = Array.from({ length: CROP_INSTANCE_COUNT }, (_, index) => snapshot.plots[index]?.position[2] ?? 0);
+  drawable.set({
+    viewProjection: shared.viewProjection,
+    cameraPosition: shared.cameraPosition,
+    scene: shared.scene,
+    lightDirection: shared.lightDirection,
+    lightColor: shared.lightColor,
+    ambientColor: shared.ambientColor,
+    fogColor: shared.fogColor,
+    lightParams: shared.lightParams,
+    crop0: cropValues.slice(0, 4),
+    crop1: cropValues.slice(4, 8),
+    crop2: cropValues.slice(8, 12),
+    stage0: stageValues.slice(0, 4),
+    stage1: stageValues.slice(4, 8),
+    stage2: stageValues.slice(8, 12),
+    rootX0: rootX.slice(0, 4),
+    rootX1: rootX.slice(4, 8),
+    rootX2: rootX.slice(8, 12),
+    rootY0: rootY.slice(0, 4),
+    rootY1: rootY.slice(4, 8),
+    rootY2: rootY.slice(8, 12),
+    rootZ0: rootZ.slice(0, 4),
+    rootZ1: rootZ.slice(4, 8),
+    rootZ2: rootZ.slice(8, 12),
+  });
+}
+
 function setSoilUniforms(
   drawable: Draw,
   values: SharedWorldUniforms,
@@ -664,10 +787,6 @@ function cameraFor(snapshot: GardenSceneSnapshot, size: readonly [number, number
     target: [0, -0.12, 0],
   });
 
-  // The diorama camera points down at the garden, but the backdrop needs a
-  // horizon-bearing basis. Tie that basis to the same orbit yaw so the sun
-  // moves consistently when Eric rotates the garden without aiming the sky
-  // through the ground.
   const skyForward = normalize3([-Math.sin(orbit), 0.055, -Math.cos(orbit)]);
   const skyRight = normalize3(cross3(skyForward, [0, 1, 0]));
   const skyUp = normalize3(cross3(skyRight, skyForward));
@@ -711,17 +830,15 @@ function cross3(a: Vec3, b: Vec3): Vec3 {
 
 function createCropMarkers(overlay: HTMLElement): CropMarker[] {
   overlay.replaceChildren();
-  return Array.from({ length: 12 }, () => {
+  return Array.from({ length: CROP_INSTANCE_COUNT }, () => {
     const root = document.createElement("span");
-    const glyph = document.createElement("span");
     const badge = document.createElement("span");
     root.className = "crop-marker";
-    glyph.className = "crop-marker-glyph";
     badge.className = "crop-marker-badge";
     root.setAttribute("aria-hidden", "true");
-    root.append(glyph, badge);
+    root.append(badge);
     overlay.append(root);
-    return { root, glyph, badge };
+    return { root, badge };
   });
 }
 
@@ -750,6 +867,7 @@ function value(matrix: ArrayLike<number>, index: number): number {
 function cleanupGeneration(generation: Generation): void {
   bestEffort(() => generation.boxGeometry.destroy());
   bestEffort(() => generation.soilGeometry.destroy());
+  bestEffort(() => generation.cropGeometry.destroy());
   bestEffort(() => generation.vegetationGeometry.destroy());
   bestEffort(() => generation.hardscape.destroy());
   bestEffort(() => destroyTarget(generation.sceneTarget));
