@@ -164,5 +164,6 @@ jobs:
             package-lock.json
             dist
             browser-evidence
+            src/render/vgpu/crop-geometry.ts
           if-no-files-found: warn
           retention-days: 7
