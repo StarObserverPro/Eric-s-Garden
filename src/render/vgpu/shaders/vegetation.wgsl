@@ -39,18 +39,50 @@ fn rotate2(value: vec2f, angle: f32) -> vec2f {
 fn vegetation_root(index: u32) -> vec3f {
   let side = index % 4u;
   let serial = f32(index / 4u);
-  let along = hash11(serial * 17.0 + f32(side) * 31.0 + 1.0);
-  let depth = 0.18 + hash11(serial * 23.0 + f32(side) * 47.0 + 5.0) * 0.95;
+  let side_f = f32(side);
+  let along = hash11(serial * 17.0 + side_f * 31.0 + 1.0);
+  let depth_seed = hash11(serial * 23.0 + side_f * 47.0 + 5.0);
+  let edge_wave =
+    sin(along * 14.45 + side_f * 1.71) * 0.11 +
+    sin(along * 31.70 - side_f * 0.93) * 0.05;
+  let inward_roll = hash11(serial * 59.0 + side_f * 73.0 + 17.0);
+  let inward_amount = select(
+    0.0,
+    0.10 + hash11(serial * 79.0 + side_f * 19.0 + 11.0) * 0.18,
+    inward_roll > 0.88,
+  );
+  let depth = 0.04 + depth_seed * 1.12;
+  let cross_offset = depth * 0.72;
+
+  // The four bands intentionally overlap the fence line and carry a noisy
+  // inward/outward envelope. Instance count and wind behavior stay unchanged;
+  // only the old ruler-straight distribution mask is removed.
   if (side == 0u) {
-    return vec3f(-4.65 + along * 9.30, -0.39, -3.48 - depth * 0.72);
+    return vec3f(
+      -4.70 + along * 9.40,
+      -0.39,
+      -3.43 + edge_wave - cross_offset + inward_amount,
+    );
   }
   if (side == 1u) {
-    return vec3f(4.72 + depth * 0.72, -0.39, -3.35 + along * 6.70);
+    return vec3f(
+      4.69 - edge_wave + cross_offset - inward_amount,
+      -0.39,
+      -3.35 + along * 6.70,
+    );
   }
   if (side == 2u) {
-    return vec3f(-4.65 + along * 9.30, -0.39, 3.48 + depth * 0.72);
+    return vec3f(
+      -4.70 + along * 9.40,
+      -0.39,
+      3.43 - edge_wave + cross_offset - inward_amount,
+    );
   }
-  return vec3f(-4.72 - depth * 0.72, -0.39, -3.35 + along * 6.70);
+  return vec3f(
+    -4.69 + edge_wave - cross_offset + inward_amount,
+    -0.39,
+    -3.35 + along * 6.70,
+  );
 }
 
 fn leaf_angle(index: u32) -> f32 {
