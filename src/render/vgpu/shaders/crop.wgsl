@@ -132,6 +132,7 @@ fn vs_main(input: VertexIn) -> VertexOut {
   let is_pumpkin = abs(crop_kind - 3.0) < 0.25;
   let is_stem = (input.material_kind > 0.5) && (input.material_kind < 1.5);
   let is_foliage = input.material_kind < 0.5;
+  let is_harvest = (input.material_kind > 1.5) && (input.material_kind < 2.5);
 
   // The cultivated soil center sits slightly below the authoritative plot root.
   // Seat every crop into that surface instead of letting root collars hover above it.
@@ -150,12 +151,38 @@ fn vs_main(input: VertexIn) -> VertexOut {
     let fruit_offset = local.xz - fruit_center;
     let fruit_distance = max(length(fruit_offset), 0.001);
     let clearance =
-      (1.0 - smoothstep(0.16 * whole_scale, 0.34 * whole_scale, fruit_distance)) *
+      (1.0 - smoothstep(0.18 * whole_scale, 0.38 * whole_scale, fruit_distance)) *
       (1.0 - smoothstep(0.24, 0.42, local.y));
     let clearance_direction = fruit_offset / fruit_distance;
-    local.x += clearance_direction.x * clearance * 0.060 * whole_scale;
-    local.z += clearance_direction.y * clearance * 0.060 * whole_scale;
-    local.y += clearance * 0.050 * whole_scale;
+    local.x += clearance_direction.x * clearance * 0.075 * whole_scale;
+    local.z += clearance_direction.y * clearance * 0.075 * whole_scale;
+    local.y += clearance * 0.055 * whole_scale;
+  }
+
+  // Keep the existing triangle carrier but spend vertex deformation on visible botanical silhouette.
+  // Strawberry berries taper below the calyx; no extra fruit mesh or instance is required.
+  if ((crop_kind > 4.5) && is_harvest) {
+    let berry_anchor = input.anchor.xz * whole_scale;
+    let drop = clamp((input.anchor.y * whole_scale - local.y) / max(0.12 * whole_scale, 0.001), 0.0, 1.0);
+    let radial = local.xz - berry_anchor;
+    local.xz = berry_anchor + radial * mix(1.02, 0.48, pow(drop, 1.35));
+  }
+
+  // Inner lettuce leaves turn upward and inward instead of reading as a flat lotus ring.
+  if ((crop_kind > 3.5) && (crop_kind < 4.5) && is_foliage) {
+    let base_radius = length(input.anchor.xz);
+    let inner_leaf = 1.0 - smoothstep(0.040, 0.066, base_radius);
+    let radial_distance = length(local.xz);
+    let body = smoothstep(0.07 * whole_scale, 0.22 * whole_scale, radial_distance);
+    local.xz *= 1.0 - inner_leaf * body * 0.24;
+    local.y += inner_leaf * body * 0.055 * whole_scale;
+  }
+
+  // The top corn blades stay subordinate to the terminal tassel rather than forming a green cone around it.
+  if ((crop_kind > 1.5) && (crop_kind < 2.5) && is_foliage) {
+    let upper_leaf = smoothstep(1.05, 1.48, input.anchor.y);
+    let scaled_anchor = input.anchor.xz * whole_scale;
+    local.xz = scaled_anchor + (local.xz - scaled_anchor) * (1.0 - upper_leaf * 0.24);
   }
 
   let material_local = local;
@@ -167,7 +194,7 @@ fn vs_main(input: VertexIn) -> VertexOut {
 
   let wind_phase = uniforms.scene.x * (1.15 + uniforms.scene.y * 0.22) + root.x * 1.37 - root.z * 0.91;
   let height_load = smoothstep(0.04, 1.20, max(local.y, 0.0));
-  let gust = sin(wind_phase) * 0.68 + sin(wind_phase * 0.47 + 1.8) * 0.32;
+  let gust = sin)Ý_phase) * 0.68 + sin(wind_phase * 0.47 + 1.8) * 0.32;
   let wind_amount = gust * uniforms.scene.y * input.flex * height_load * 0.048;
   local.x += wind_amount * -0.84;
   local.z += wind_amount * 0.54;
@@ -188,7 +215,7 @@ fn foliage_color(crop: f32, variation: f32) -> vec3f {
   if (crop < 0.5) {
     color = vec3f(0.17, 0.48, 0.115);
   } else if (crop < 1.5) {
-    color = vec3f(0.12, 0.42, 0.085);
+    color = vec3f(0.16, 0.46, 0.10);
   } else if (crop < 2.5) {
     color = vec3f(0.24, 0.52, 0.12);
   } else if (crop < 3.5) {
@@ -202,20 +229,20 @@ fn foliage_color(crop: f32, variation: f32) -> vec3f {
 }
 
 fn foliage_roughness(crop: f32) -> f32 {
-  if (crop < 0.5) { return 0.68; }
-  if (crop < 1.5) { return 0.82; }
-  if (crop < 2.5) { return 0.52; }
-  if (crop < 3.5) { return 0.86; }
-  if (crop < 4.5) { return 0.61; }
-  return 0.56;
+  if (crop < 0.5) { return 0.68; } // carrot: fine matte leaflets
+  if (crop < 1.5) { return 0.82; } // tomato: visibly hairy / matte
+  if (crop < 2.5) { return 0.52; } // corn: moderately waxy blade
+  if (crop < 3.5) { return 0.86; } // pumpkin: coarse, scabrous leaf
+  if (crop < 4.5) { return 0.61; } // lettuce: hydrated but not glossy plastic
+  return 0.56; // strawberry: modest cuticular sheen
 }
 
 fn foliage_transmission(crop: f32) -> f32 {
   if (crop < 0.5) { return 0.64; }
-  if (crop < 1.5) { return 0.38; }
+  if (crop < 1.5) { return 0.40; }
   if (crop < 2.5) { return 0.46; }
   if (crop < 3.5) { return 0.34; }
-  if (crop < 4.5) { return 0.70; }
+  if (crop < 4.5) { return 0.60; }
   return 0.50;
 }
 
@@ -228,6 +255,15 @@ fn foliage_specular_scale(crop: f32) -> f32 {
   return 0.82;
 }
 
+fn foliage_ambient(crop: f32) -> f32 {
+  if (crop < 0.5) { return 0.72; }
+  if (crop < 1.5) { return 0.79; }
+  if (crop < 2.5) { return 0.69; }
+  if (crop < 3.5) { return 0.74; }
+  if (crop < 4.5) { return 0.74; }
+  return 0.75;
+}
+
 fn stem_roughness(crop: f32) -> f32 {
   if (crop < 0.5) { return 0.76; }
   if (crop < 1.5) { return 0.84; }
@@ -238,20 +274,20 @@ fn stem_roughness(crop: f32) -> f32 {
 }
 
 fn harvest_roughness(crop: f32) -> f32 {
-  if (crop < 0.5) { return 0.70; }
-  if (crop < 1.5) { return 0.28; }
-  if (crop < 2.5) { return 0.46; }
-  if (crop < 3.5) { return 0.58; }
-  if (crop > 4.5) { return 0.38; }
+  if (crop < 0.5) { return 0.70; } // carrot root: dull / micro-rough
+  if (crop < 1.5) { return 0.26; } // tomato cuticle: smooth dielectric
+  if (crop < 2.5) { return 0.46; } // exposed corn kernel tip
+  if (crop < 3.5) { return 0.58; } // pumpkin rind: broad waxy lobe highlights
+  if (crop > 4.5) { return 0.36; } // strawberry: glossy but seeded/uneven
   return 0.62;
 }
 
 fn harvest_scatter(crop: f32) -> f32 {
   if (crop < 0.5) { return 0.025; }
-  if (crop < 1.5) { return 0.095; }
+  if (crop < 1.5) { return 0.080; }
   if (crop < 2.5) { return 0.035; }
   if (crop < 3.5) { return 0.055; }
-  if (crop > 4.5) { return 0.080; }
+  if (crop > 4.5) { return 0.110; }
   return 0.030;
 }
 
@@ -268,7 +304,7 @@ fn harvest_color(crop: f32, stage: f32, variation: f32) -> vec3f {
   } else if (crop < 3.5) {
     color = mix(vec3f(0.46, 0.58, 0.10), vec3f(0.97, 0.34, 0.035), smoothstep(0.58, 0.94, stage));
   } else if (crop > 4.5) {
-    color = mix(vec3f(0.55, 0.62, 0.12), vec3f(0.93, 0.045, 0.045), smoothstep(0.57, 0.96, stage));
+    color = mix(vec3f(0.55, 0.62, 0.12), vec3f(0.96, 0.060, 0.048), smoothstep(0.57, 0.96, stage));
   }
   return color * (0.93 + variation * 0.12);
 }
@@ -291,7 +327,7 @@ fn fs_main(input: VertexOut, @builtin(front_facing) front_facing: bool) -> @loca
   var albedo = foliage_color(crop, variation);
   var roughness = foliage_roughness(crop);
   var backlight_strength = foliage_transmission(crop);
-  var ambient_strength = 0.72;
+  var ambient_strength = foliage_ambient(crop);
   var direct_floor = 0.080;
   var surface_specular_scale = foliage_specular_scale(crop);
 
@@ -310,6 +346,9 @@ fn fs_main(input: VertexOut, @builtin(front_facing) front_facing: bool) -> @loca
     roughness = harvest_roughness(crop);
     backlight_strength = harvest_scatter(crop);
     ambient_strength = 0.58;
+    if ((crop > 0.5) && (crop < 1.5)) { ambient_strength = 0.62; }
+    if ((crop > 2.5) && (crop < 3.5)) { ambient_strength = 0.60; }
+    if (crop > 4.5) { ambient_strength = 0.64; }
     direct_floor = 0.090;
     surface_specular_scale = 1.0;
   } else if (is_blossom) {
@@ -345,13 +384,15 @@ fn fs_main(input: VertexOut, @builtin(front_facing) front_facing: bool) -> @loca
     roughness = clamp(roughness + (surface_noise - 0.5) * noise_amount * 0.90, 0.22, 0.90);
   }
 
+  // Lettuce inner leaves carry less chlorophyll and scatter more light through the hydrated head.
   if (is_foliage && (crop > 3.5) && (crop < 4.5)) {
     let crown_radius = length(input.local_surface.xz);
     let inner_head = (1.0 - smoothstep(0.10, 0.27, crown_radius)) * smoothstep(0.05, 0.23, input.local_surface.y);
-    albedo = mix(albedo, vec3f(0.55, 0.73, 0.26), inner_head * 0.38);
-    backlight_strength += inner_head * 0.12;
+    albedo = mix(albedo, vec3f(0.45, 0.65, 0.22), inner_head * 0.28);
+    backlight_strength += inner_head * 0.07;
   }
 
+  // Carrot shoulder sees light and air; buried root remains duller and slightly earth-muted.
   if (is_harvest && (crop < 0.5)) {
     let shoulder = smoothstep(0.015, 0.105, input.local_surface.y);
     albedo *= mix(vec3f(0.86, 0.78, 0.68), vec3f(1.05, 1.01, 0.94), shoulder);
@@ -373,6 +414,7 @@ fn fs_main(input: VertexOut, @builtin(front_facing) front_facing: bool) -> @loca
     albedo *= 0.96 + facet_value * 0.08;
   }
 
+  // Foliage keeps a bent continuous surface while harvest organs retain stronger low-poly facet definition.
   var normal = sided_normal;
   if (is_harvest) {
     normal = normalize(mix(sided_normal, face_normal, 0.72));
@@ -425,12 +467,15 @@ fn fs_main(input: VertexOut, @builtin(front_facing) front_facing: bool) -> @loca
     let specular_strength = (0.028 + (1.0 - roughness) * 0.24) * mix(0.52, 1.0, fresnel);
     color += uniforms.lightColor.rgb * specular * specular_strength * uniforms.lightParams.x * shadow;
 
+    // Dense fruit/root tissue only gets a shallow wrap/backscatter cue, never leaf-like through-transmission.
     let fruit_scatter = pow(max(dot(-normal, light_direction), 0.0), 1.6) * backlight_strength;
     color += albedo * uniforms.lightColor.rgb * fruit_scatter * 0.22 * uniforms.lightParams.x * shadow;
 
+    // Per-face tone separation prevents fruit from collapsing into a single smooth color patch.
     let facet_tone = 0.94 + 0.08 * clamp(face_normal.y * 0.5 + 0.5, 0.0, 1.0);
     color *= facet_tone;
 
+    // Pumpkin ribs are material detail on the existing one-fruit topology, not extra geometry.
     if ((crop > 2.5) && (crop < 3.5)) {
       let whole_scale = 0.40 + input.stage * 0.60;
       let fruit_center = vec2f(0.33, 0.14) * whole_scale;
