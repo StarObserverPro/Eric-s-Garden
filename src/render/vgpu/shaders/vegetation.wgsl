@@ -67,7 +67,7 @@ fn vegetation_root(index: u32) -> vec3f {
   if (side == 1u) {
     return vec3f(
       4.69 - edge_wave + cross_offset - inward_amount,
-      -3.35 + along * 6.70,
+      -0.39,
       -3.35 + along * 6.70,
     );
   }
