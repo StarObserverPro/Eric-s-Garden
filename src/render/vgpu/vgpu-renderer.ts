@@ -23,9 +23,21 @@ import { perspectiveCamera } from "vgpu/scene";
 
 import { CROPS } from "../../game/model";
 import type { GardenSceneSnapshot, Vec3, WeatherProfile } from "../../scene/snapshot";
-import type { GardenRenderer, RenderSettings, RendererMetrics } from "../contract";
+import {
+  INSTANCE_TIERS,
+  type GardenRenderer,
+  type InstanceTier,
+  type RenderSettings,
+  type RendererMetrics,
+  type RuntimeQualityProfile,
+} from "../contract";
 import { createBoxVertices, createVegetationVertices } from "./geometry";
 import { createHardscapeLayer, type HardscapeLayer } from "./hardscape";
+import {
+  createInstanceTierBundles,
+  selectInstanceTierBundle,
+  type InstanceTierBundles,
+} from "./quality-bundles";
 import { observeDeviceLoss } from "./raw/device-loss";
 import { createSoilGeometryData } from "./soil-geometry";
 import blitShader from "./shaders/blit.wgsl";
@@ -54,7 +66,7 @@ interface Generation {
   readonly blit: Effect;
   readonly staticBundle: Bundle;
   readonly soilBundle: Bundle;
-  readonly vegetationBundle: Bundle;
+  readonly vegetationBundles: InstanceTierBundles;
 }
 
 interface ProjectedPlot {
@@ -106,6 +118,7 @@ export class VgpuRenderer implements GardenRenderer {
   readonly #releaseDeviceLoss: () => void;
   #snapshot: GardenSceneSnapshot;
   #generation: Generation;
+  #qualityProfile: RuntimeQualityProfile;
   #projectedPlots: ProjectedPlot[] = [];
   #disposed = false;
   #fatalError: Error | undefined;
@@ -128,6 +141,11 @@ export class VgpuRenderer implements GardenRenderer {
     this.#output = output;
     this.#snapshot = snapshot;
     this.#generation = generation;
+    this.#qualityProfile = {
+      level: "full",
+      vegetationInstances: settings.instances,
+      pressure: 0,
+    };
     this.#markers = createCropMarkers(overlay);
     this.#releaseError = gpu.onError((error: unknown) => {
       this.#fatalError = asError(error);
@@ -160,6 +178,15 @@ export class VgpuRenderer implements GardenRenderer {
 
   setSnapshot(snapshot: GardenSceneSnapshot): void {
     this.#snapshot = snapshot;
+  }
+
+  setQualityProfile(profile: RuntimeQualityProfile): void {
+    if (profile.vegetationInstances > this.#settings.instances) {
+      throw new Error(
+        `Runtime vegetation tier ${profile.vegetationInstances} exceeds the configured ceiling ${this.#settings.instances}.`,
+      );
+    }
+    this.#qualityProfile = profile;
   }
 
   resize(): void {
@@ -235,6 +262,11 @@ export class VgpuRenderer implements GardenRenderer {
       scene_tex: generation.sceneTarget,
     });
 
+    const vegetationBundle = selectInstanceTierBundle(
+      generation.vegetationBundles,
+      this.#qualityProfile.vegetationInstances,
+    );
+
     frame(this.#gpu, (currentFrame: Frame) => {
       currentFrame.pass(
         {
@@ -249,7 +281,7 @@ export class VgpuRenderer implements GardenRenderer {
         (pass: FramePass) => pass.bundles(
           generation.staticBundle,
           generation.soilBundle,
-          generation.vegetationBundle,
+          vegetationBundle,
         ),
       );
       currentFrame.pass(
@@ -279,8 +311,8 @@ export class VgpuRenderer implements GardenRenderer {
       kind: this.kind,
       passes: 3,
       drawCalls: 6,
-      instances: this.#settings.instances + 3,
-      resources: 15,
+      instances: this.#qualityProfile.vegetationInstances + 3,
+      resources: 14 + this.#generation.vegetationBundles.size,
       dpr: Math.max(1, this.#canvas.width / Math.max(1, this.#canvas.clientWidth)),
     };
   }
@@ -522,10 +554,15 @@ async function createGeneration(
       { target: sceneTarget, label: "garden-soil" },
       (recorded: BundleRecorder) => recorded.draw(soil),
     );
-    const vegetationBundle = bundle(
+    const vegetationTiers: InstanceTier[] = INSTANCE_TIERS.filter(
+      (tier) => tier <= settings.instances,
+    );
+    const vegetationBundles = createInstanceTierBundles(
       gpu,
-      { target: sceneTarget, label: "garden-vegetation" },
-      (recorded: BundleRecorder) => recorded.draw(vegetation),
+      sceneTarget,
+      vegetation,
+      vegetationTiers,
+      "garden-vegetation",
     );
 
     return {
@@ -542,7 +579,7 @@ async function createGeneration(
       blit,
       staticBundle,
       soilBundle,
-      vegetationBundle,
+      vegetationBundles,
     };
   } catch (error) {
     bestEffort(() => boxGeometry?.destroy());

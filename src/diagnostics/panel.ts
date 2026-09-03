@@ -20,13 +20,20 @@ export function updateDiagnostics(elements: DiagnosticsElements, metrics: Runtim
   elements.rendererName.textContent = metrics.kind === "vgpu" ? "vgpu · WebGPU" : "Canvas 2D";
   elements.rendererMessage.textContent = metrics.message;
   elements.fps.textContent = metrics.fps > 0 ? metrics.fps.toFixed(0) : "—";
-  elements.frame.textContent = metrics.frameMs > 0 ? `${metrics.frameMs.toFixed(1)} ms` : "—";
+  elements.frame.textContent = metrics.frameP95Ms > 0
+    ? `p95 ${metrics.frameP95Ms.toFixed(1)} ms · CPU ${metrics.frameMs.toFixed(1)} ms · Q ${metrics.qualityPressure.toFixed(2)}`
+    : metrics.frameMs > 0
+      ? `CPU ${metrics.frameMs.toFixed(1)} ms · Q ${metrics.qualityPressure.toFixed(2)}`
+      : `Q ${metrics.qualityPressure.toFixed(2)}`;
   elements.drawCalls.textContent = String(metrics.drawCalls);
-  elements.instances.textContent = metrics.instances.toLocaleString("en-US");
+  elements.instances.textContent = metrics.kind === "vgpu"
+    ? `${metrics.instances.toLocaleString("en-US")} · veg ${metrics.vegetationInstances.toLocaleString("en-US")}`
+    : metrics.instances.toLocaleString("en-US");
   elements.passes.textContent = String(metrics.passes);
   elements.resources.textContent = String(metrics.resources);
   elements.dpr.textContent = metrics.dpr.toFixed(1);
   elements.indicator.dataset.status = metrics.status;
+  elements.indicator.dataset.quality = metrics.qualityLevel;
 }
 
 export function syncSettingsControls(elements: DiagnosticsElements, settings: RenderSettings): void {
