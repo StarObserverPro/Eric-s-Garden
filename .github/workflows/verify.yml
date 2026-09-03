@@ -75,6 +75,12 @@ jobs:
             npx vitest run tests/crop-render-node.test.ts
           test -s browser-evidence/crop-lineup-node.ppm
           test -s browser-evidence/pumpkin-closeup-node.ppm
+      - name: Capture production crop-soil contact evidence
+        run: |
+          mkdir -p browser-evidence
+          CROP_SOIL_EVIDENCE_PATH=browser-evidence/crop-soil-contact-node.ppm \
+            npx vitest run tests/crop-soil-contact-node.test.ts
+          test -s browser-evidence/crop-soil-contact-node.ppm
       - name: Install WebGPU browser probe for renderer architecture changes
         if: steps.webgpu_scope.outputs.required == 'true'
         run: |
@@ -164,7 +170,5 @@ jobs:
             package-lock.json
             dist
             browser-evidence
-            src/render/vgpu/crop-geometry.ts
-            src/render/vgpu/shaders/crop.wgsl
           if-no-files-found: warn
           retention-days: 7
