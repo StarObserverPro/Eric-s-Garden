@@ -67,6 +67,20 @@ jobs:
           mkdir -p browser-evidence
           HARDSCAPE_EVIDENCE_PATH=browser-evidence/hardscape-node.ppm npx vitest run tests/hardscape-render-node.test.ts
           test -s browser-evidence/hardscape-node.ppm
+      - name: Capture VGPU crop visual evidence
+        run: |
+          mkdir -p browser-evidence
+          CROP_LINEUP_EVIDENCE_PATH=browser-evidence/crop-lineup-node.ppm \
+          PUMPKIN_EVIDENCE_PATH=browser-evidence/pumpkin-closeup-node.ppm \
+            npx vitest run tests/crop-render-node.test.ts
+          test -s browser-evidence/crop-lineup-node.ppm
+          test -s browser-evidence/pumpkin-closeup-node.ppm
+      - name: Capture production crop-soil contact evidence
+        run: |
+          mkdir -p browser-evidence
+          CROP_SOIL_EVIDENCE_PATH=browser-evidence/crop-soil-contact-node.ppm \
+            npx vitest run tests/crop-soil-contact-node.test.ts
+          test -s browser-evidence/crop-soil-contact-node.ppm
       - name: Install WebGPU browser probe for renderer architecture changes
         if: steps.webgpu_scope.outputs.required == 'true'
         run: |

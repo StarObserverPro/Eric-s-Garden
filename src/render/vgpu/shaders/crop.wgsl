@@ -44,10 +44,15 @@ struct VertexOut {
   @location(3) stage: f32,
   @location(4) variation: f32,
   @location(5) visible_flag: f32,
+  @location(6) local_surface: vec3f,
 };
 
 fn hash11(value: f32) -> f32 {
   return fract(sin(value * 12.9898 + 78.233) * 43758.5453);
+}
+
+fn hash21(value: vec2f) -> f32 {
+  return fract(sin(dot(value, vec2f(127.1, 311.7))) * 43758.5453);
 }
 
 fn component4(value: vec4f, lane: u32) -> f32 {
@@ -107,9 +112,10 @@ fn vs_main(input: VertexIn) -> VertexOut {
   output.variation = hash11(f32(input.instance_index) * 53.0 + input.birth * 97.0 + input.material_kind * 11.0);
   output.normal = vec3f(0.0, 1.0, 0.0);
   output.world = root;
+  output.local_surface = vec3f(0.0);
   output.visible_flag = 0.0;
 
-  if (visual_stage < 0.5 || abs(input.crop_kind - crop_kind) > 0.25) {
+  if ((visual_stage < 0.5) || (abs(input.crop_kind - crop_kind) > 0.25)) {
     output.position = vec4f(2.0, 2.0, 2.0, 1.0);
     return output;
   }
@@ -123,6 +129,36 @@ fn vs_main(input: VertexIn) -> VertexOut {
   }
 
   var local = input.anchor * whole_scale + (input.local_position - input.anchor) * whole_scale * organ_growth;
+  let is_pumpkin = abs(crop_kind - 3.0) < 0.25;
+  let is_stem = (input.material_kind > 0.5) && (input.material_kind < 1.5);
+  let is_foliage = input.material_kind < 0.5;
+
+  // The cultivated soil center sits slightly below the authoritative plot root.
+  // Seat every crop into that surface instead of letting root collars hover above it.
+  local.y -= 0.018 * whole_scale;
+
+  // Keep one clear pumpkin main vine: lift and thicken the low carrier without inventing side-vine topology.
+  if (is_pumpkin && is_stem) {
+    let ground_factor = 1.0 - smoothstep(0.10, 0.24, max(local.y, 0.0));
+    local += input.local_normal * (0.016 * whole_scale * organ_growth * ground_factor);
+    local.y += 0.035 * whole_scale * ground_factor;
+  }
+
+  // Keep pumpkin foliage out of the primary fruit occupancy pocket near the home root.
+  if (is_pumpkin && is_foliage) {
+    let fruit_center = vec2f(0.22, 0.12) * whole_scale;
+    let fruit_offset = local.xz - fruit_center;
+    let fruit_distance = max(length(fruit_offset), 0.001);
+    let clearance =
+      (1.0 - smoothstep(0.16 * whole_scale, 0.34 * whole_scale, fruit_distance)) *
+      (1.0 - smoothstep(0.24, 0.42, local.y));
+    let clearance_direction = fruit_offset / fruit_distance;
+    local.x += clearance_direction.x * clearance * 0.060 * whole_scale;
+    local.z += clearance_direction.y * clearance * 0.060 * whole_scale;
+    local.y += clearance * 0.050 * whole_scale;
+  }
+
+  let material_local = local;
   let basis = orientation_basis(input.instance_index, crop_kind, root);
   let basis_x = basis[0];
   let basis_z = basis[1];
@@ -141,27 +177,28 @@ fn vs_main(input: VertexIn) -> VertexOut {
   output.position = uniforms.viewProjection * vec4f(world, 1.0);
   output.normal = normal;
   output.world = world;
+  output.local_surface = material_local;
   output.stage = stage_norm;
   output.visible_flag = 1.0;
   return output;
 }
 
 fn foliage_color(crop: f32, variation: f32) -> vec3f {
-  var color = vec3f(0.16, 0.40, 0.09);
+  var color = vec3f(0.20, 0.49, 0.11);
   if (crop < 0.5) {
-    color = vec3f(0.13, 0.38, 0.09);
+    color = vec3f(0.17, 0.48, 0.115);
   } else if (crop < 1.5) {
-    color = vec3f(0.09, 0.32, 0.065);
+    color = vec3f(0.12, 0.42, 0.085);
   } else if (crop < 2.5) {
-    color = vec3f(0.19, 0.43, 0.10);
+    color = vec3f(0.24, 0.52, 0.12);
   } else if (crop < 3.5) {
-    color = vec3f(0.14, 0.38, 0.075);
+    color = vec3f(0.19, 0.49, 0.10);
   } else if (crop < 4.5) {
-    color = vec3f(0.31, 0.56, 0.14);
+    color = vec3f(0.34, 0.62, 0.17);
   } else {
-    color = vec3f(0.15, 0.39, 0.09);
+    color = vec3f(0.19, 0.49, 0.11);
   }
-  return color * (0.86 + variation * 0.24);
+  return color * (0.90 + variation * 0.24);
 }
 
 fn harvest_color(crop: f32, stage: f32, variation: f32) -> vec3f {
@@ -170,20 +207,20 @@ fn harvest_color(crop: f32, stage: f32, variation: f32) -> vec3f {
     color = vec3f(0.95, 0.39, 0.055);
   } else if (crop < 1.5) {
     let ripe = smoothstep(0.54, 0.96, stage);
-    color = mix(vec3f(0.34, 0.52, 0.10), vec3f(0.96, 0.16, 0.055), ripe);
+    color = mix(vec3f(0.34, 0.52, 0.10), vec3f(0.96, 0.13, 0.045), ripe);
   } else if (crop < 2.5) {
     let ripe = smoothstep(0.68, 0.98, stage);
     color = mix(vec3f(0.45, 0.59, 0.11), vec3f(0.94, 0.68, 0.13), ripe);
   } else if (crop < 3.5) {
-    color = mix(vec3f(0.46, 0.58, 0.10), vec3f(0.95, 0.37, 0.045), smoothstep(0.58, 0.94, stage));
+    color = mix(vec3f(0.46, 0.58, 0.10), vec3f(0.97, 0.34, 0.035), smoothstep(0.58, 0.94, stage));
   } else if (crop > 4.5) {
-    color = mix(vec3f(0.55, 0.62, 0.12), vec3f(0.91, 0.055, 0.055), smoothstep(0.57, 0.96, stage));
+    color = mix(vec3f(0.55, 0.62, 0.12), vec3f(0.93, 0.045, 0.045), smoothstep(0.57, 0.96, stage));
   }
-  return color * (0.94 + variation * 0.10);
+  return color * (0.93 + variation * 0.12);
 }
 
 @fragment
-fn fs_main(input: VertexOut) -> @location(0) vec4f {
+fn fs_main(input: VertexOut, @builtin(front_facing) front_facing: bool) -> @location(0) vec4f {
   if (input.visible_flag < 0.5) {
     discard;
   }
@@ -191,53 +228,150 @@ fn fs_main(input: VertexOut) -> @location(0) vec4f {
   let crop = input.crop_material.x;
   let material = input.crop_material.y;
   let variation = input.variation;
-  var albedo = foliage_color(crop, variation);
-  var roughness = 0.72;
-  var backlight_strength = 0.28;
+  let is_foliage = material < 0.5;
+  let is_stem = (material > 0.5) && (material < 1.5);
+  let is_harvest = (material > 1.5) && (material < 2.5);
+  let is_blossom = (material > 2.5) && (material < 3.5);
+  let is_husk = material > 3.5;
 
-  if (material > 0.5 && material < 1.5) {
-    albedo = foliage_color(crop, variation) * vec3f(0.70, 0.78, 0.62);
-    roughness = 0.80;
-    backlight_strength = 0.12;
-  } else if (material > 1.5 && material < 2.5) {
+  var albedo = foliage_color(crop, variation);
+  var roughness = 0.58;
+  var backlight_strength = 0.42;
+  var ambient_strength = 0.72;
+  var direct_floor = 0.080;
+
+  if (is_stem) {
+    albedo = foliage_color(crop, variation) * vec3f(0.68, 0.76, 0.60);
+    roughness = 0.78;
+    backlight_strength = 0.10;
+    ambient_strength = 0.62;
+    if ((crop > 2.5) && (crop < 3.5)) {
+      albedo = vec3f(0.32, 0.52, 0.095) * (0.92 + variation * 0.15);
+      roughness = 0.60;
+      direct_floor = 0.090;
+    }
+  } else if (is_harvest) {
     albedo = harvest_color(crop, input.stage, variation);
-    roughness = select(0.62, 0.48, ((crop > 0.5 && crop < 1.5) || crop > 4.5));
-    backlight_strength = 0.08;
-  } else if (material > 2.5 && material < 3.5) {
+    roughness = 0.58;
+    if (crop < 0.5) {
+      roughness = 0.60;
+    } else if (crop < 1.5) {
+      roughness = 0.34;
+    } else if (crop < 2.5) {
+      roughness = 0.68;
+    } else if (crop < 3.5) {
+      roughness = 0.50;
+    } else if (crop > 4.5) {
+      roughness = 0.39;
+    }
+    backlight_strength = 0.04;
+    ambient_strength = 0.58;
+    direct_floor = 0.090;
+  } else if (is_blossom) {
     albedo = select(vec3f(0.96, 0.83, 0.50), vec3f(0.96, 0.91, 0.73), crop > 4.5);
     roughness = 0.76;
     backlight_strength = 0.38;
-  } else if (material > 3.5) {
+    ambient_strength = 0.60;
+  } else if (is_husk) {
     albedo = mix(foliage_color(crop, variation), vec3f(0.78, 0.67, 0.18), 0.28);
     roughness = 0.78;
     backlight_strength = 0.22;
+    ambient_strength = 0.67;
   }
 
-  let normal = normalize(input.normal);
+  let surface_noise = hash21(floor(input.world.xz * 22.0 + vec2f(input.world.y * 11.0, variation * 29.0)));
+  if (is_foliage || is_husk) {
+    let leaf_wave = 0.5 + 0.5 * sin(
+      input.world.x * 18.0 + input.world.z * 15.0 + input.world.y * 13.0 + variation * 6.2831853
+    );
+    albedo *= 0.92 + leaf_wave * 0.16;
+  } else if (is_stem) {
+    albedo *= 0.95 + surface_noise * 0.08;
+  } else if (is_harvest) {
+    albedo *= 0.96 + surface_noise * 0.07;
+    roughness = clamp(roughness + (surface_noise - 0.5) * 0.08, 0.28, 0.82);
+  }
+
+  let interpolated_normal = normalize(input.normal);
+  let sided_normal = select(-interpolated_normal, interpolated_normal, front_facing);
+  var face_normal = normalize(cross(dpdx(input.world), dpdy(input.world)));
+  if (!front_facing) {
+    face_normal = -face_normal;
+  }
+  if (!front_facing && (is_foliage || is_husk)) {
+    albedo *= vec3f(0.90, 0.96, 0.86);
+  }
+  if (is_foliage || is_husk) {
+    let facet_value = clamp(face_normal.y * 0.5 + 0.5, 0.0, 1.0);
+    albedo *= 0.95 + facet_value * 0.10;
+  }
+
+  // Foliage keeps some smooth bend while exposing ribbon/facet changes to the light.
+  // Harvest surfaces lean much harder on geometric face normals for readable low-poly volume.
+  var normal = sided_normal;
+  if (is_harvest) {
+    normal = normalize(mix(sided_normal, face_normal, 0.72));
+  } else if (is_foliage || is_husk) {
+    normal = normalize(mix(sided_normal, face_normal, 0.38));
+  } else {
+    normal = normalize(mix(sided_normal, face_normal, 0.20));
+  }
+
   let light_direction = normalize(uniforms.lightDirection.xyz);
   let view_direction = normalize(uniforms.cameraPosition.xyz - input.world);
   let half_direction = normalize(light_direction + view_direction);
-  let two_sided_diffuse = abs(dot(normal, light_direction));
-  let wrapped_diffuse = 0.30 + 0.70 * two_sided_diffuse;
+  let n_dot_l = max(dot(normal, light_direction), 0.0);
+  let n_dot_v = max(dot(normal, view_direction), 0.0);
+  let n_dot_h = max(dot(normal, half_direction), 0.0);
+  let wrapped_diffuse = clamp((n_dot_l + 0.10) / 1.10, 0.0, 1.0);
+  let hemisphere = clamp(normal.y * 0.5 + 0.5, 0.0, 1.0);
   let back_lighting = pow(max(dot(view_direction, -light_direction), 0.0), 4.0);
+  let transmission = pow(max(dot(-normal, light_direction), 0.0), 1.35);
   let shadow = cloud_shadow(input.world);
-  let base_occlusion = 0.74 + 0.26 * smoothstep(-0.02, 0.42, input.world.y);
+  var base_occlusion = 0.74 + 0.26 * smoothstep(-0.02, 0.46, input.world.y);
+  if (is_foliage || is_husk) {
+    base_occlusion = 0.82 + 0.18 * smoothstep(-0.02, 0.40, input.world.y);
+  }
 
   var color = albedo * base_occlusion * (
-    uniforms.ambientColor.rgb * 0.94 +
-    uniforms.lightColor.rgb * (0.22 + wrapped_diffuse * 0.96) * uniforms.lightParams.x
+    uniforms.ambientColor.rgb * ambient_strength * (0.72 + hemisphere * 0.28) +
+    uniforms.lightColor.rgb * (direct_floor + wrapped_diffuse * 0.99) * uniforms.lightParams.x
   ) * shadow;
-  color += albedo * uniforms.lightColor.rgb * back_lighting * backlight_strength * uniforms.lightParams.x * shadow;
 
-  if (material > 1.5 && material < 2.5) {
-    let spec_power = mix(18.0, 42.0, 1.0 - roughness);
-    let specular = pow(max(abs(dot(normal, half_direction)), 0.0), spec_power);
-    color += uniforms.lightColor.rgb * specular * (0.05 + (1.0 - roughness) * 0.13) * uniforms.lightParams.x * shadow;
+  color += albedo * uniforms.lightColor.rgb * back_lighting * backlight_strength * uniforms.lightParams.x * shadow;
+  if (is_foliage || is_husk) {
+    color += albedo * uniforms.lightColor.rgb * transmission * backlight_strength * 0.28 * uniforms.lightParams.x * shadow;
+    let leaf_sheen = pow(n_dot_h, 18.0) * (0.022 + (1.0 - roughness) * 0.045);
+    color += uniforms.lightColor.rgb * leaf_sheen * uniforms.lightParams.x * shadow;
+  }
+
+  if (is_harvest) {
+    let spec_power = mix(14.0, 68.0, 1.0 - roughness);
+    let fresnel = 0.04 + 0.96 * pow(1.0 - n_dot_v, 5.0);
+    let specular = pow(n_dot_h, spec_power);
+    let specular_strength = (0.035 + (1.0 - roughness) * 0.20) * mix(0.58, 1.0, fresnel);
+    color += uniforms.lightColor.rgb * specular * specular_strength * uniforms.lightParams.x * shadow;
+
+    // Per-face tone separation prevents fruit from collapsing into a single smooth color patch.
+    let facet_tone = 0.94 + 0.08 * clamp(face_normal.y * 0.5 + 0.5, 0.0, 1.0);
+    color *= facet_tone;
+
+    // Pumpkin ribs are material detail on the existing one-fruit topology, not extra geometry.
+    if ((crop > 2.5) && (crop < 3.5)) {
+      let whole_scale = 0.40 + input.stage * 0.60;
+      let fruit_center = vec2f(0.22, 0.12) * whole_scale;
+      let fruit_offset = input.local_surface.xz - fruit_center;
+      let fruit_length = max(length(fruit_offset), 0.001);
+      let fruit_direction = fruit_offset / fruit_length;
+      let angle = atan2(fruit_direction.y, fruit_direction.x);
+      let rib = 0.5 + 0.5 * cos(angle * 8.0);
+      color *= 0.95 + pow(rib, 2.0) * 0.10;
+    }
   }
 
   let rain = uniforms.lightParams.z;
   color *= 1.0 - rain * 0.035;
-  if (material > 1.5 && material < 2.5) {
+  if (is_harvest) {
     color += uniforms.lightColor.rgb * rain * 0.025;
   }
 
