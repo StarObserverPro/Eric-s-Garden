@@ -12,6 +12,7 @@ let notebook: HTMLElement | undefined;
 let notebookButton: HTMLButtonElement | undefined;
 
 const statsButton = requireElement<HTMLButtonElement>("statsBtn");
+const speakButton = requireElement<HTMLButtonElement>("speakBtn");
 statsButton.addEventListener("click", interceptNotebookButton, { capture: true });
 window.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && mounted && notebook?.classList.contains("is-portrait-open")) {
@@ -46,14 +47,37 @@ function mountPortraitHud(): void {
 
   const topHud = create("div", "portrait-top-hud");
   topHud.setAttribute("aria-label", "菜园状态");
+  // Current explicit HUD requirements own the portrait interaction surface.
+  // Legacy mobile button widths may be narrower, so make the two real controls
+  // explicit 44 px targets here instead of letting old compatibility CSS win.
+  topHud.style.height = "56px";
+  topHud.style.gridTemplateColumns = "38px minmax(58px, 1fr) 64px 44px 44px";
   app.append(topHud);
   createdNodes.push(topHud);
 
   move(requireElement("levelBadge"), topHud);
   move(requireSelector(".mission-progress-row", mission), topHud);
   move(requireElement("starCount"), topHud);
-  move(requireElement("speakBtn"), topHud);
+  move(speakButton, topHud);
   move(statsButton, topHud);
+
+  rememberInlineStyle(speakButton);
+  speakButton.style.width = "44px";
+  speakButton.style.minWidth = "44px";
+  speakButton.style.height = "44px";
+  speakButton.style.minHeight = "44px";
+
+  // The old mobile .pill-btn rule paints a hard-coded 📊 pseudo-element.
+  // Remove that legacy class while portrait HUD owns this button so the user's
+  // explicit notebook icon is rendered literally, then restore the class later.
+  statsButton.dataset.portraitOriginalClass = statsButton.className;
+  statsButton.classList.remove("pill-btn");
+  statsButton.classList.add("icon-btn");
+  rememberInlineStyle(statsButton);
+  statsButton.style.width = "44px";
+  statsButton.style.minWidth = "44px";
+  statsButton.style.height = "44px";
+  statsButton.style.minHeight = "44px";
 
   notebookButton = statsButton;
   notebookButton.textContent = "📓";
@@ -70,6 +94,8 @@ function mountPortraitHud(): void {
   closeButton.type = "button";
   closeButton.textContent = "×";
   closeButton.setAttribute("aria-label", "关闭菜园小本本");
+  closeButton.style.minWidth = "44px";
+  closeButton.style.minHeight = "44px";
   closeButton.addEventListener("click", closeNotebook);
   notebookHeading.append(closeButton);
   createdNodes.push(closeButton);
@@ -164,10 +190,10 @@ function unmountPortraitHud(): void {
   const badge = document.getElementById("levelBadge");
   const level = badge?.textContent?.match(/\d+/)?.[0];
 
-  for (let i = restoreMoves.length - 1; i >= 0; i -= 1) restoreMoves[i]();
+  for (const restore of [...restoreMoves].reverse()) restore();
   restoreMoves = [];
 
-  for (let i = createdNodes.length - 1; i >= 0; i -= 1) createdNodes[i].remove();
+  for (const node of [...createdNodes].reverse()) node.remove();
   createdNodes = [];
 
   if (badge && level) badge.textContent = `第 ${level} 关`;
@@ -175,6 +201,12 @@ function unmountPortraitHud(): void {
   statsButton.setAttribute("aria-label", "统计表");
   statsButton.removeAttribute("aria-expanded");
   statsButton.removeAttribute("title");
+  restoreInlineStyle(statsButton);
+  restoreInlineStyle(speakButton);
+  if (statsButton.dataset.portraitOriginalClass !== undefined) {
+    statsButton.className = statsButton.dataset.portraitOriginalClass;
+    delete statsButton.dataset.portraitOriginalClass;
+  }
 
   const retryRenderer = document.getElementById("retryRendererBtn");
   if (retryRenderer instanceof HTMLButtonElement) {
@@ -240,6 +272,18 @@ function move(node: HTMLElement, destination: HTMLElement): void {
     else parent.appendChild(node);
   });
   destination.append(node);
+}
+
+function rememberInlineStyle(node: HTMLElement): void {
+  node.dataset.portraitOriginalStyle = node.getAttribute("style") ?? "";
+}
+
+function restoreInlineStyle(node: HTMLElement): void {
+  const original = node.dataset.portraitOriginalStyle;
+  if (original === undefined) return;
+  if (original) node.setAttribute("style", original);
+  else node.removeAttribute("style");
+  delete node.dataset.portraitOriginalStyle;
 }
 
 function section(extraClass: string, label: string): HTMLElement {
