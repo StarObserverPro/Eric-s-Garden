@@ -75,6 +75,14 @@ jobs:
             npx vitest run tests/crop-render-node.test.ts
           test -s browser-evidence/crop-lineup-node.ppm
           test -s browser-evidence/pumpkin-closeup-node.ppm
+      - name: Capture botanical crop detail evidence
+        run: |
+          mkdir -p browser-evidence
+          CROP_NODE_EVIDENCE_PATH=browser-evidence/crop-node-detail-node.ppm \
+          CROP_ROSETTE_EVIDENCE_PATH=browser-evidence/crop-rosette-detail-node.ppm \
+            npx vitest run tests/crop-botany-render-node.test.ts
+          test -s browser-evidence/crop-node-detail-node.ppm
+          test -s browser-evidence/crop-rosette-detail-node.ppm
       - name: Capture production crop-soil contact evidence
         run: |
           mkdir -p browser-evidence
