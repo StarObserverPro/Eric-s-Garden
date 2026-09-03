@@ -22,7 +22,7 @@ import {
 import { perspectiveCamera } from "vgpu/scene";
 
 import { CROPS } from "../../game/model";
-import type { GardenSceneSnapshot } from "../../scene/snapshot";
+import type { GardenSceneSnapshot, Vec3, WeatherProfile } from "../../scene/snapshot";
 import type { GardenRenderer, RenderSettings, RendererMetrics } from "../contract";
 import { createBoxVertices, createVegetationVertices } from "./geometry";
 import { observeDeviceLoss } from "./raw/device-loss";
@@ -31,6 +31,7 @@ import blitShader from "./shaders/blit.wgsl";
 import gardenShader from "./shaders/garden.wgsl";
 import skyShader from "./shaders/sky.wgsl";
 import soilShader from "./shaders/soil.wgsl";
+import vegetationShader from "./shaders/vegetation.wgsl";
 
 interface CropMarker {
   readonly root: HTMLSpanElement;
@@ -65,7 +66,31 @@ interface ProjectedPlot {
 
 interface CameraState {
   readonly viewProjection: ArrayLike<number>;
-  readonly position: readonly [number, number, number];
+  readonly position: Vec3;
+  readonly skyForward: Vec3;
+  readonly skyRight: Vec3;
+  readonly skyUp: Vec3;
+  readonly aspect: number;
+  readonly tanHalfFov: number;
+}
+
+interface LightingState {
+  readonly sunDirection: Vec3;
+  readonly directIntensity: number;
+}
+
+interface SharedWorldUniforms {
+  readonly viewProjection: ArrayLike<number>;
+  readonly cameraPosition: readonly number[];
+  readonly scene: readonly number[];
+  readonly lightDirection: readonly number[];
+  readonly lightColor: readonly number[];
+  readonly ambientColor: readonly number[];
+  readonly fogColor: readonly number[];
+  readonly lightParams: readonly number[];
+  readonly wet0: readonly number[];
+  readonly wet1: readonly number[];
+  readonly wet2: readonly number[];
 }
 
 export class VgpuRenderer implements GardenRenderer {
@@ -150,14 +175,26 @@ export class VgpuRenderer implements GardenRenderer {
     const generation = this.#generation;
     const time = timeMs * 0.001;
     const camera = cameraFor(snapshot, generation.size);
+    const lighting = lightingFor(snapshot.weather);
     const wetness = snapshot.plots.map((plot) => plot.wetness);
-    const shared = {
+    const shared: SharedWorldUniforms = {
       viewProjection: camera.viewProjection,
+      cameraPosition: [...camera.position, 1],
       scene: [
         time,
         snapshot.weather.wind,
         snapshot.weather.cloudiness,
         snapshot.weather.sunlight,
+      ],
+      lightDirection: [...lighting.sunDirection, 0],
+      lightColor: [...snapshot.weather.sunColor, 1],
+      ambientColor: [...snapshot.weather.ambientColor, 1],
+      fogColor: [...snapshot.weather.fogColor, 1],
+      lightParams: [
+        lighting.directIntensity,
+        snapshot.weather.fogDensity,
+        snapshot.weather.rain,
+        snapshot.weather.exposure,
       ],
       wet0: wetness.slice(0, 4),
       wet1: wetness.slice(4, 8),
@@ -166,25 +203,26 @@ export class VgpuRenderer implements GardenRenderer {
     setWorldUniforms(generation.ground, shared, snapshot, 0);
     setWorldUniforms(generation.path, shared, snapshot, 2);
     setWorldUniforms(generation.fence, shared, snapshot, 3);
-    setWorldUniforms(generation.vegetation, shared, snapshot, 4);
+    setVegetationUniforms(generation.vegetation, shared);
     setSoilUniforms(generation.soil, {
-      viewProjection: camera.viewProjection,
-      cameraPosition: [...camera.position, 1],
+      ...shared,
       scene: [
         time,
         snapshot.weather.cloudiness,
         snapshot.weather.sunlight,
         snapshot.weather.rain,
       ],
-      wet0: shared.wet0,
-      wet1: shared.wet1,
-      wet2: shared.wet2,
     });
 
     generation.sky.set({
-      resolution: generation.size,
+      viewport: [generation.size[0], generation.size[1], camera.aspect, camera.tanHalfFov],
       skyTop: [...snapshot.weather.skyTop, 1],
       skyHorizon: [...snapshot.weather.skyHorizon, 1],
+      sunColor: [...snapshot.weather.sunColor, 1],
+      sunDirection: [...lighting.sunDirection, 0],
+      cameraForward: [...camera.skyForward, 0],
+      cameraRight: [...camera.skyRight, 0],
+      cameraUp: [...camera.skyUp, 0],
       scene: [
         time,
         snapshot.weather.rain,
@@ -194,6 +232,7 @@ export class VgpuRenderer implements GardenRenderer {
     });
     generation.blit.set({
       resolution: this.#output.size,
+      tone: [snapshot.weather.exposure, snapshot.weather.rain, 0, 0],
       scene_tex: generation.sceneTarget,
     });
 
@@ -378,7 +417,7 @@ async function createGeneration(
       ],
     });
     vegetationGeometry = geometry(gpu, {
-      label: "garden-vegetation",
+      label: "garden-vegetation-segmented-tufts",
       buffers: [
         {
           data: createVegetationVertices().buffer,
@@ -420,7 +459,7 @@ async function createGeneration(
       label: "garden-fence",
     });
     const vegetation = draw(gpu, {
-      shader: gardenShader,
+      shader: vegetationShader,
       geometry: vegetationGeometry,
       instances: settings.instances,
       cull: "none",
@@ -430,10 +469,22 @@ async function createGeneration(
     const blit = effect(gpu, blitShader, { label: "garden-blit" });
 
     const camera = cameraFor(snapshot, size);
+    const lighting = lightingFor(snapshot.weather);
     const emptyWet = [0, 0, 0, 0];
-    const shared = {
+    const shared: SharedWorldUniforms = {
       viewProjection: camera.viewProjection,
+      cameraPosition: [...camera.position, 1],
       scene: [0, snapshot.weather.wind, snapshot.weather.cloudiness, snapshot.weather.sunlight],
+      lightDirection: [...lighting.sunDirection, 0],
+      lightColor: [...snapshot.weather.sunColor, 1],
+      ambientColor: [...snapshot.weather.ambientColor, 1],
+      fogColor: [...snapshot.weather.fogColor, 1],
+      lightParams: [
+        lighting.directIntensity,
+        snapshot.weather.fogDensity,
+        snapshot.weather.rain,
+        snapshot.weather.exposure,
+      ],
       wet0: emptyWet,
       wet1: emptyWet,
       wet2: emptyWet,
@@ -441,23 +492,25 @@ async function createGeneration(
     setWorldUniforms(ground, shared, snapshot, 0);
     setWorldUniforms(path, shared, snapshot, 2);
     setWorldUniforms(fence, shared, snapshot, 3);
-    setWorldUniforms(vegetation, shared, snapshot, 4);
+    setVegetationUniforms(vegetation, shared);
     setSoilUniforms(soil, {
-      viewProjection: camera.viewProjection,
-      cameraPosition: [...camera.position, 1],
+      ...shared,
       scene: [0, snapshot.weather.cloudiness, snapshot.weather.sunlight, snapshot.weather.rain],
-      wet0: emptyWet,
-      wet1: emptyWet,
-      wet2: emptyWet,
     });
     sky.set({
-      resolution: size,
+      viewport: [size[0], size[1], camera.aspect, camera.tanHalfFov],
       skyTop: [...snapshot.weather.skyTop, 1],
       skyHorizon: [...snapshot.weather.skyHorizon, 1],
+      sunColor: [...snapshot.weather.sunColor, 1],
+      sunDirection: [...lighting.sunDirection, 0],
+      cameraForward: [...camera.skyForward, 0],
+      cameraRight: [...camera.skyRight, 0],
+      cameraUp: [...camera.skyUp, 0],
       scene: [0, snapshot.weather.rain, snapshot.weather.cloudiness, snapshot.weather.sunlight],
     });
     blit.set({
       resolution: output.size,
+      tone: [snapshot.weather.exposure, snapshot.weather.rain, 0, 0],
       scene_tex: sceneTarget,
       linear_samp: sampler(gpu, { minFilter: "linear", magFilter: "linear" }),
     });
@@ -520,62 +573,120 @@ async function createGeneration(
 
 function setWorldUniforms(
   drawable: Draw,
-  shared: {
-    readonly viewProjection: ArrayLike<number>;
-    readonly scene: readonly number[];
-    readonly wet0: readonly number[];
-    readonly wet1: readonly number[];
-    readonly wet2: readonly number[];
-  },
+  shared: SharedWorldUniforms,
   snapshot: GardenSceneSnapshot,
   kind: number,
 ): void {
   drawable.set({
     viewProjection: shared.viewProjection,
+    cameraPosition: shared.cameraPosition,
     scene: shared.scene,
-    weather: [
-      snapshot.weather.rain,
-      kind,
-      snapshot.weather.skyHorizon[0],
-      snapshot.weather.skyHorizon[2],
-    ],
+    weather: [snapshot.weather.rain, kind, 0, 0],
+    lightDirection: shared.lightDirection,
+    lightColor: shared.lightColor,
+    ambientColor: shared.ambientColor,
+    fogColor: shared.fogColor,
+    lightParams: shared.lightParams,
     wet0: shared.wet0,
     wet1: shared.wet1,
     wet2: shared.wet2,
   });
 }
 
+function setVegetationUniforms(drawable: Draw, shared: SharedWorldUniforms): void {
+  drawable.set({
+    viewProjection: shared.viewProjection,
+    cameraPosition: shared.cameraPosition,
+    scene: shared.scene,
+    lightDirection: shared.lightDirection,
+    lightColor: shared.lightColor,
+    ambientColor: shared.ambientColor,
+    fogColor: shared.fogColor,
+    lightParams: shared.lightParams,
+  });
+}
+
 function setSoilUniforms(
   drawable: Draw,
-  values: {
-    readonly viewProjection: ArrayLike<number>;
-    readonly cameraPosition: readonly number[];
-    readonly scene: readonly number[];
-    readonly wet0: readonly number[];
-    readonly wet1: readonly number[];
-    readonly wet2: readonly number[];
-  },
+  values: SharedWorldUniforms,
 ): void {
-  drawable.set(values);
+  drawable.set({
+    viewProjection: values.viewProjection,
+    cameraPosition: values.cameraPosition,
+    scene: values.scene,
+    lightDirection: values.lightDirection,
+    lightColor: values.lightColor,
+    ambientColor: values.ambientColor,
+    fogColor: values.fogColor,
+    lightParams: values.lightParams,
+    wet0: values.wet0,
+    wet1: values.wet1,
+    wet2: values.wet2,
+  });
 }
 
 function cameraFor(snapshot: GardenSceneSnapshot, size: readonly [number, number]): CameraState {
   const orbit = snapshot.camera.angle + Math.PI * 0.25;
   const distance = 12.6 / snapshot.camera.zoom;
-  const position = [
+  const position: Vec3 = [
     Math.sin(orbit) * distance,
     7.6 / snapshot.camera.zoom,
     Math.cos(orbit) * distance,
-  ] as const;
+  ];
+  const aspect = size[0] / Math.max(1, size[1]);
+  const fov = 42;
   const camera = perspectiveCamera({
-    fov: 42,
-    aspect: size[0] / Math.max(1, size[1]),
+    fov,
+    aspect,
     near: 0.1,
     far: 80,
     position,
     target: [0, -0.12, 0],
   });
-  return { viewProjection: camera.viewProjection, position };
+
+  // The diorama camera points down at the garden, but the backdrop needs a
+  // horizon-bearing basis. Tie that basis to the same orbit yaw so the sun
+  // moves consistently when Eric rotates the garden without aiming the sky
+  // through the ground.
+  const skyForward = normalize3([-Math.sin(orbit), 0.055, -Math.cos(orbit)]);
+  const skyRight = normalize3(cross3(skyForward, [0, 1, 0]));
+  const skyUp = normalize3(cross3(skyRight, skyForward));
+  return {
+    viewProjection: camera.viewProjection,
+    position,
+    skyForward,
+    skyRight,
+    skyUp,
+    aspect,
+    tanHalfFov: Math.tan((fov * Math.PI) / 360),
+  };
+}
+
+function lightingFor(weather: WeatherProfile): LightingState {
+  const horizontalLength = Math.cos(weather.sunElevation);
+  const sunDirection = normalize3([
+    -0.64 * horizontalLength,
+    Math.sin(weather.sunElevation),
+    -0.77 * horizontalLength,
+  ]);
+  return {
+    sunDirection,
+    directIntensity: 0.35 + weather.sunlight * 0.70,
+  };
+}
+
+function normalize3(value: Vec3): Vec3 {
+  const length = Math.hypot(value[0], value[1], value[2]);
+  if (length < 0.000001) return [0, 1, 0];
+  return [value[0] / length, value[1] / length, value[2] / length];
+}
+
+function cross3(a: Vec3, b: Vec3): Vec3 {
+  return [
+    a[1] * b[2] - a[2] * b[1],
+    a[2] * b[0] - a[0] * b[2],
+    a[0] * b[1] - a[1] * b[0],
+  ];
 }
 
 function createCropMarkers(overlay: HTMLElement): CropMarker[] {
