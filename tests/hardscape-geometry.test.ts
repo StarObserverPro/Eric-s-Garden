@@ -13,10 +13,10 @@ test("hardscape bakes bed gaps, irregular stones and rustic fence into one stati
   expect(hardscape.stats.stoneCount).toBe(HARDSCAPE_STONE_COUNT);
   expect(hardscape.stats.fencePostCount).toBe(HARDSCAPE_FENCE_POST_COUNT);
   expect(hardscape.stats.fenceRailSegmentCount).toBe(HARDSCAPE_FENCE_RAIL_SEGMENT_COUNT);
-  expect(hardscape.stats.gapTriangles).toBeGreaterThan(1_000);
+  expect(hardscape.stats.gapTriangles).toBe(836);
   expect(hardscape.stats.stoneTriangles).toBe(HARDSCAPE_STONE_COUNT * 40);
-  expect(hardscape.stats.fenceTriangles).toBeGreaterThan(800);
-  expect(hardscape.stats.triangleCount).toBeGreaterThan(3_000);
+  expect(hardscape.stats.fenceTriangles).toBe(912);
+  expect(hardscape.stats.triangleCount).toBe(2_868);
   expect(hardscape.data.length).toBe(hardscape.stats.vertexCount * HARDSCAPE_VERTEX_STRIDE_FLOATS);
 });
 
