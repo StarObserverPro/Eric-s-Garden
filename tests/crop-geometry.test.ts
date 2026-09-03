@@ -3,6 +3,7 @@ import { expect, test } from "vitest";
 import {
   CROP_KIND,
   CROP_VERTEX_STRIDE_FLOATS,
+  CROP_VISIBLE_TOPOLOGY,
   advanceVisualStage,
   createCropGeometryData,
   cropMarkerHeight,
@@ -47,6 +48,33 @@ test("crop vertices are finite, normalized and include all species/material fami
 
   expect([...crops].sort()).toEqual([0, 1, 2, 3, 4, 5]);
   expect([...materials].sort()).toEqual([0, 1, 2, 3, 4]);
+});
+
+test("visible morphology contract keeps species-specific axes, leaf order and fruit groups", () => {
+  expect(CROP_VISIBLE_TOPOLOGY.carrot).toMatchObject({ leafOrder: "basal-rosette", leafUnits: 12 });
+  expect(CROP_VISIBLE_TOPOLOGY.tomato).toMatchObject({ leafOrder: "alternate-compound", primaryAxisSegments: 7, fruitGroups: 3 });
+  expect(CROP_VISIBLE_TOPOLOGY.corn).toMatchObject({ leafOrder: "alternate-node", primaryAxisSegments: 10, leafUnits: 9, fruitGroups: 1 });
+  expect(CROP_VISIBLE_TOPOLOGY.pumpkin).toMatchObject({ leafOrder: "alternate-node", primaryAxisSegments: 6, fruitGroups: 1 });
+  expect(CROP_VISIBLE_TOPOLOGY.lettuce).toMatchObject({ leafOrder: "independent-rosette", leafUnits: 24, fruitGroups: 0 });
+  expect(CROP_VISIBLE_TOPOLOGY.strawberry).toMatchObject({ leafOrder: "spiral-crown", leafUnits: 8, fruitGroups: 2 });
+});
+
+test("crop-specific material carriers reflect the organs that must remain visibly attached", () => {
+  const { data } = createCropGeometryData();
+  const materialsByCrop = new Map<number, Set<number>>();
+  for (let offset = 0; offset < data.length; offset += CROP_VERTEX_STRIDE_FLOATS) {
+    const crop = Math.round(data[offset + CROP_OFFSET]!);
+    const material = Math.round(data[offset + MATERIAL_OFFSET]!);
+    if (!materialsByCrop.has(crop)) materialsByCrop.set(crop, new Set<number>());
+    materialsByCrop.get(crop)!.add(material);
+  }
+
+  expect([...materialsByCrop.get(CROP_KIND.carrot)!].sort()).toEqual([0, 1, 2]);
+  expect([...materialsByCrop.get(CROP_KIND.tomato)!].sort()).toEqual([0, 1, 2]);
+  expect([...materialsByCrop.get(CROP_KIND.corn)!].sort()).toEqual([0, 1, 2, 3, 4]);
+  expect([...materialsByCrop.get(CROP_KIND.pumpkin)!].sort()).toEqual([0, 1, 2]);
+  expect([...materialsByCrop.get(CROP_KIND.lettuce)!].sort()).toEqual([0, 1]);
+  expect([...materialsByCrop.get(CROP_KIND.strawberry)!].sort()).toEqual([0, 1, 2]);
 });
 
 test("ordinary crops stay bed-scale while pumpkin alone owns the long overflow footprint", () => {
