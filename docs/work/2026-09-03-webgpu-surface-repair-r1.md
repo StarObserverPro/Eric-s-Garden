@@ -19,15 +19,16 @@ Restore the vgpu browser renderer by keeping Surface access inside `frame(gpu)` 
 
 ## Scene carrier and affected owners
 - Carrier: renderer infrastructure; no scene carrier change.
-- Paths: `src/render/vgpu/vgpu-renderer.ts`, `.github/workflows/webgpu-architecture-verify.yml`, `docs/VERIFICATION.md`, `docs/experience/webgpu-surface-verification-r1.md`.
+- Paths: `src/render/vgpu/vgpu-renderer.ts`, `.github/workflows/verify.yml`, `docs/VERIFICATION.md`, `docs/experience/webgpu-surface-verification-r1.md`.
 - Architecture boundary touched: WebGPU Surface lifecycle / renderer verification.
 
 ## Current state
-- Completed: A2.
-- Current step: add a WebGPU-active production browser smoke scoped to renderer architecture paths.
-- Next action: run exact-head GitHub verification and inspect the browser renderer status.
+- Completed: A2, A3 implementation.
+- Current step: run the existing Verify workflow with the architecture-only browser WebGPU step activated by this renderer diff.
+- Next action: inspect exact-head browser evidence and repair any remaining browser-only failure.
 - Blocker: none.
 
 ## Evidence
 - Root cause: vgpu 0.3.1 rejects `effect.compile(surface)` outside `frame(gpu)` with `VGPU-SURFACE-NOT-IN-FRAME`.
 - Repair: `garden-blit` now precompiles with `{ colors: [output.format] }`; live Surface presentation remains inside `frame(gpu)`.
+- Verification routing: existing Verify classifies changed paths; the WebGPU browser smoke runs for renderer/runtime architecture changes and is skipped for model-only work.
