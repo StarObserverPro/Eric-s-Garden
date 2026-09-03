@@ -23,6 +23,7 @@ struct VertexOut {
   @location(1) world: vec3f,
   @location(2) blade: vec4f,
   @location(3) flower: f32,
+  @location(4) tone: vec2f,
 };
 
 fn hash11(value: f32) -> f32 {
@@ -56,6 +57,7 @@ fn leaf_angle(index: u32) -> f32 {
   if (index == 1u) { return 1.13; }
   if (index == 2u) { return 2.55; }
   if (index == 3u) { return 4.31; }
+  if (index == 4u) { return 5.42; }
   return 0.0;
 }
 
@@ -63,6 +65,7 @@ fn leaf_height(index: u32) -> f32 {
   if (index == 1u) { return 0.86; }
   if (index == 2u) { return 0.73; }
   if (index == 3u) { return 0.62; }
+  if (index == 4u) { return 0.56; }
   return 1.0;
 }
 
@@ -76,11 +79,15 @@ fn cloud_shadow(world: vec3f) -> f32 {
 
 @vertex
 fn vs_main(input: VertexIn) -> VertexOut {
-  let seed = hash11(f32(input.instance_index) * 29.0 + 7.0);
-  let variation = hash11(f32(input.instance_index) * 41.0 + 19.0);
+  let instance = f32(input.instance_index);
+  let seed = hash11(instance * 29.0 + 7.0);
+  let variation = hash11(instance * 41.0 + 19.0);
+  let height_seed = hash11(instance * 67.0 + 23.0);
+  let color_seed = hash11(instance * 71.0 + 29.0);
+  let hue_seed = hash11(instance * 83.0 + 31.0);
   let root = vegetation_root(input.instance_index);
-  let understory = select(0.0, 1.0, hash11(f32(input.instance_index) * 17.0 + 3.0) > 0.72);
-  let has_flower = hash11(f32(input.instance_index) * 43.0 + 13.0) > 0.955 && understory < 0.5;
+  let understory = select(0.0, 1.0, hash11(instance * 17.0 + 3.0) > 0.72);
+  let has_flower = hash11(instance * 43.0 + 13.0) > 0.955 && understory < 0.5;
 
   let prevailing = normalize(vec2f(-0.84, 0.54));
   let along = dot(root.xz, prevailing);
@@ -100,8 +107,9 @@ fn vs_main(input: VertexIn) -> VertexOut {
   var local_speed = wind_speed * (0.46 + 0.68 * gust_front + 0.16 * second_band + 0.10 * eddy);
   local_speed = max(local_speed, 0.15);
 
-  let canopy_height = (0.38 + seed * 0.40) * (0.94 + 0.06 * sin(root.x * 1.1 + root.z * 0.7));
-  let under_height = 0.14 + seed * 0.17;
+  let height_scale = 0.88 + height_seed * 0.22;
+  let canopy_height = (0.36 + seed * 0.44) * height_scale * (0.94 + 0.06 * sin(root.x * 1.1 + root.z * 0.7));
+  let under_height = (0.12 + seed * 0.19) * height_scale;
   let base_height = mix(canopy_height, under_height, understory);
   let blade_width = mix(0.024 + variation * 0.017, 0.018 + variation * 0.010, understory);
   let flexibility = mix(0.70 + variation * 0.74, 0.94 + variation * 0.54, understory);
@@ -115,18 +123,20 @@ fn vs_main(input: VertexIn) -> VertexOut {
   var height_value = 0.0;
   var flower_value = 0.0;
 
-  if (input.part < 3.5) {
+  if (input.part < 4.5) {
     let leaf = u32(input.part + 0.5);
     let t = input.local_position.y;
-    let yaw = seed * 6.2831853 + leaf_angle(leaf) + variation * 0.42;
-    let blade_height = base_height * leaf_height(leaf);
+    let leaf_seed = hash11(instance * 97.0 + f32(leaf) * 13.0 + 5.0);
+    let yaw = seed * 6.2831853 + leaf_angle(leaf) + variation * 0.42 + (leaf_seed - 0.5) * 0.18;
+    let blade_height = base_height * leaf_height(leaf) * (0.86 + leaf_seed * 0.28);
+    let leaf_width = blade_width * (0.90 + leaf_seed * 0.18);
     let deflection_shape = t * t * (6.0 - 4.0 * t + t * t) / 3.0;
     let shape_derivative = (12.0 * t - 12.0 * t * t + 4.0 * t * t * t) / 3.0;
     let flutter =
       sin(uniforms.scene.x * 4.35 + variation * 12.0 + along * 1.12 + f32(leaf) * 1.7) *
       0.018 * t * t * t * clamp(local_speed / 7.0, 0.0, 1.0);
     let width_direction = vec2f(cos(yaw), sin(yaw));
-    let width_offset = width_direction * input.local_position.x * blade_width;
+    let width_offset = width_direction * input.local_position.x * leaf_width;
     let wind_offset = wind_direction * (bend * blade_height * 0.72 * deflection_shape + flutter * blade_height);
     world += vec3f(width_offset.x + wind_offset.x, 0.0, width_offset.y + wind_offset.y);
     world.y += t * blade_height * (1.0 - 0.19 * bend * bend * t);
@@ -160,6 +170,7 @@ fn vs_main(input: VertexIn) -> VertexOut {
   output.world = world;
   output.blade = vec4f(height_value, variation, understory, clamp(bend / 1.18, 0.0, 1.0));
   output.flower = flower_value;
+  output.tone = vec2f(color_seed, hue_seed);
   return output;
 }
 
@@ -169,15 +180,21 @@ fn fs_main(input: VertexOut) -> @location(0) vec4f {
   let variation = input.blade.y;
   let understory = input.blade.z;
   let wind_load = input.blade.w;
+  let color_seed = input.tone.x;
+  let hue_seed = input.tone.y;
   var albedo = vec3f(0.20, 0.45, 0.10);
 
   if (input.flower > 0.5) {
     let warm = select(vec3f(0.96, 0.55, 0.68), vec3f(0.98, 0.80, 0.28), variation > 0.5);
     albedo = mix(warm, vec3f(0.96, 0.91, 0.74), smoothstep(0.82, 1.0, variation) * 0.34);
   } else {
-    let canopy = mix(vec3f(0.075, 0.22, 0.035), vec3f(0.38, 0.61, 0.13), smoothstep(0.0, 0.94, height));
-    let under = mix(vec3f(0.045, 0.14, 0.025), vec3f(0.19, 0.39, 0.07), smoothstep(0.0, 0.92, height));
-    albedo = mix(canopy, under, understory) * (0.82 + 0.30 * variation);
+    let canopy = mix(vec3f(0.055, 0.18, 0.025), vec3f(0.40, 0.64, 0.14), smoothstep(0.0, 0.94, height));
+    let under = mix(vec3f(0.035, 0.115, 0.018), vec3f(0.20, 0.42, 0.075), smoothstep(0.0, 0.92, height));
+    let base = mix(canopy, under, understory);
+    let cool_tint = vec3f(0.88, 1.06, 0.88);
+    let warm_tint = vec3f(1.08, 0.97, 0.78);
+    let hue_tint = mix(cool_tint, warm_tint, hue_seed);
+    albedo = base * mix(vec3f(1.0), hue_tint, 0.22) * (0.78 + 0.46 * color_seed);
   }
 
   let normal = normalize(input.normal);

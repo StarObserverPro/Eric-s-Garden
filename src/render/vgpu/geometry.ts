@@ -26,8 +26,9 @@ export function createBoxVertices(): Float32Array<ArrayBuffer> {
 
 export function createVegetationVertices(): Float32Array<ArrayBuffer> {
   const output: number[] = [];
-  const segments = 5;
-  for (let leaf = 0; leaf < 4; leaf += 1) {
+  const bladeSegments = [5, 5, 5, 5, 3] as const;
+  for (let leaf = 0; leaf < bladeSegments.length; leaf += 1) {
+    const segments = bladeSegments[leaf]!;
     for (let segment = 0; segment < segments; segment += 1) {
       const t0 = segment / segments;
       const t1 = (segment + 1) / segments;
@@ -51,7 +52,7 @@ export function createVegetationVertices(): Float32Array<ArrayBuffer> {
     [0.30, 1.10, 0],
     [-0.30, 1.10, 0],
     [0, 0, 1],
-    4,
+    5,
   );
   pushQuad(
     output,
@@ -60,7 +61,7 @@ export function createVegetationVertices(): Float32Array<ArrayBuffer> {
     [0, 1.10, 0.30],
     [0, 1.10, -0.30],
     [1, 0, 0],
-    4,
+    5,
   );
   return new Float32Array(output);
 }
