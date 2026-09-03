@@ -126,8 +126,9 @@ fn vs_main(input: VertexIn) -> VertexOut {
       sin(uniforms.scene.x * 4.35 + variation * 12.0 + along * 1.12 + f32(leaf) * 1.7) *
       0.018 * t * t * t * clamp(local_speed / 7.0, 0.0, 1.0);
     let width_direction = vec2f(cos(yaw), sin(yaw));
-    world.xz += width_direction * input.local_position.x * blade_width;
-    world.xz += wind_direction * (bend * blade_height * 0.72 * deflection_shape + flutter * blade_height);
+    let width_offset = width_direction * input.local_position.x * blade_width;
+    let wind_offset = wind_direction * (bend * blade_height * 0.72 * deflection_shape + flutter * blade_height);
+    world += vec3f(width_offset.x + wind_offset.x, 0.0, width_offset.y + wind_offset.y);
     world.y += t * blade_height * (1.0 - 0.19 * bend * bend * t);
 
     let width_tangent = normalize(vec3f(width_direction.x, 0.0, width_direction.y));
@@ -145,8 +146,10 @@ fn vs_main(input: VertexIn) -> VertexOut {
     let yaw = seed * 6.2831853 + variation * 0.6;
     let local_xz = rotate2(input.local_position.xz, yaw) * (0.075 + variation * 0.025);
     world += vec3f(local_xz.x, flower_height + (input.local_position.y - 1.02) * 0.16, local_xz.y);
-    world.xz += wind_direction * bend * flower_height * 0.72 * deflection_shape;
-    normal = normalize(vec3f(rotate2(input.local_normal.xz, yaw).x, input.local_normal.y, rotate2(input.local_normal.xz, yaw).y));
+    let flower_wind_offset = wind_direction * bend * flower_height * 0.72 * deflection_shape;
+    world += vec3f(flower_wind_offset.x, 0.0, flower_wind_offset.y);
+    let rotated_normal = rotate2(input.local_normal.xz, yaw);
+    normal = normalize(vec3f(rotated_normal.x, input.local_normal.y, rotated_normal.y));
     height_value = 1.0;
     flower_value = 1.0;
   }
