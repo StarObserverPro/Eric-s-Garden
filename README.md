@@ -1,6 +1,6 @@
 # Eric 的秘密菜园 R2
 
-这是给 Eric 的小菜园升级版。它刻意保持为一个**零依赖静态站点**：没有账号、没有数据库、没有后端，进度直接保存在浏览器 `localStorage`。因此非常适合直接放到 ChatGPT Sites、Vercel、Netlify、Cloudflare Pages、GitHub Pages 或任何能托管静态文件的地方。
+这是给 Eric 的小菜园升级版。当前 R2 刻意保持为一个**零依赖静态站点**：没有账号、没有数据库、没有后端，进度直接保存在浏览器 `localStorage`。因此非常适合直接放到 ChatGPT Sites、Vercel、Netlify、Cloudflare Pages、GitHub Pages 或任何能托管静态文件的地方。
 
 ## R2 做了什么
 
@@ -18,18 +18,22 @@
 
 ```text
 .
-├── index.html          # 页面结构
-├── styles.css          # 全部视觉与响应式布局
-├── app.js              # 游戏状态、Canvas 菜园、触控、存档
+├── AGENTS.md            # 轻量仓库治理与注意力入口
+├── index.html           # 页面结构
+├── styles.css           # 全部视觉与响应式布局
+├── app.js               # 游戏状态、Canvas 菜园、触控、存档
 ├── favicon.svg
 ├── site.webmanifest
-├── package.json        # 仅提供本地预览命令，无依赖
-└── README.md
+├── package.json         # 当前 R2 仅提供本地预览命令，无依赖
+├── UPGRADE_NOTES.md
+└── docs/
+    ├── PROJECT_SCOPE_R1.md  # 产品、场景与 vgpu 分阶段 Scope
+    └── work/README.md       # 只在实际施工时使用的短工作包模板
 ```
 
 ## 本地运行
 
-不需要 `npm install`。
+当前 R2 不需要 `npm install`。
 
 ```bash
 npm run dev
@@ -43,7 +47,7 @@ npm run dev
 
 最省事的方式是新建一个空 GitHub repo，把本目录全部文件放到 repo 根目录；部署平台的 Output / Build 设置保持为空或选择“静态站点”即可。
 
-如果目标平台要求构建命令：留空。发布目录：仓库根目录 `.`。
+如果目标平台要求构建命令：当前 R2 留空。发布目录：仓库根目录 `.`。
 
 ## 存档
 
@@ -55,6 +59,14 @@ eric-secret-garden-r2
 
 右上角 `↻` 可以清空并重新从第 1 关开始。
 
+## 下一阶段：vgpu / WebGPU 试验场
+
+后续方向不是把水晶花园整套缩小搬入，而是把较高的单屏视觉与优化预算集中到一个小型 garden diorama：中央菜畦、草花边缘、矮栅栏/石路和简单天空先构成基础世界，再分阶段验证程序土壤、湿润、生长、instancing、风和天气。
+
+详细范围见 [`docs/PROJECT_SCOPE_R1.md`](docs/PROJECT_SCOPE_R1.md)。未来施工先读 [`AGENTS.md`](AGENTS.md)，只有明确激活的任务才在 `docs/work/` 创建短工作包。
+
+该阶段可以引入固定版本的 TypeScript、Vite、vgpu 和 WGSL **构建时依赖**，但生产输出仍保持为无需后端的静态站点。当前 Canvas 2D 路径先作为兼容回退和视觉基线保留。
+
 ## 设计边界
 
-R2 不是水晶花园的缩小复制品。它只借用“花园是一块可以被照料、观察、积累的地方”这个核心；没有经济系统、背包、邮件、复杂天气、3D 资产流水线或服务器存档，避免把 6 岁孩子的操作负担做大。
+R2 不是水晶花园的缩小复制品。它只借用“花园是一块可以被照料、观察、积累的地方”这个核心；没有经济系统、背包、邮件、复杂制作链、服务器存档或多地图，避免把 6 岁孩子的操作负担做大。
