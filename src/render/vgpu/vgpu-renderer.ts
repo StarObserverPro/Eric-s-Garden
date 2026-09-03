@@ -54,6 +54,8 @@ import gardenShader from "./shaders/garden.wgsl";
 import skyShader from "./shaders/sky.wgsl";
 import soilShader from "./shaders/soil.wgsl";
 import vegetationShader from "./shaders/vegetation.wgsl";
+import { createWateringCanVertices } from "./watering-can-geometry";
+import { advanceWettingVisual, shouldStartWettingVisual } from "./wetting-visual";
 
 interface CropMarker {
   readonly root: HTMLSpanElement;
@@ -67,11 +69,13 @@ interface Generation {
   readonly soilGeometry: Geometry;
   readonly cropGeometry: Geometry;
   readonly vegetationGeometry: Geometry;
+  readonly wateringCanGeometry: Geometry;
   readonly ground: Draw;
   readonly soil: Draw;
   readonly crop: Draw;
   readonly hardscape: HardscapeLayer;
   readonly vegetation: Draw;
+  readonly wateringCan: Draw;
   readonly sky: Effect;
   readonly blit: Effect;
   readonly staticBundle: Bundle;
@@ -132,6 +136,8 @@ export class VgpuRenderer implements GardenRenderer {
   #qualityProfile: RuntimeQualityProfile;
   #visualStages: number[];
   #visualCrops: (CropId | null)[];
+  #visualWetness: number[];
+  #activeWateringPlot: number | null = null;
   #lastRenderTimeMs: number | undefined;
   #projectedPlots: ProjectedPlot[] = [];
   #disposed = false;
@@ -162,6 +168,7 @@ export class VgpuRenderer implements GardenRenderer {
     };
     this.#visualStages = snapshot.plots.map((plot) => plot.crop && !plot.harvested ? plot.stage : 0);
     this.#visualCrops = snapshot.plots.map((plot) => plot.crop && !plot.harvested ? plot.crop : null);
+    this.#visualWetness = snapshot.plots.map((plot) => plot.wetness);
     this.#markers = createCropMarkers(overlay);
     this.#releaseError = gpu.onError((error: unknown) => {
       this.#fatalError = asError(error);
@@ -202,6 +209,18 @@ export class VgpuRenderer implements GardenRenderer {
         this.#visualStages[index] = nextStage;
       }
       this.#visualCrops[index] = nextCrop;
+
+      const previousWetness = this.#snapshot.plots[index]?.wetness ?? 0;
+      const nextWetness = plot?.wetness ?? 0;
+      if (shouldStartWettingVisual(previousWetness, nextWetness)) {
+        this.#visualWetness[index] = 0;
+        this.#activeWateringPlot = index;
+      } else if (nextWetness < previousWetness || nextWetness <= 0) {
+        this.#visualWetness[index] = nextWetness;
+        if (this.#activeWateringPlot === index && nextWetness < 0.5) {
+          this.#activeWateringPlot = null;
+        }
+      }
     }
     this.#snapshot = snapshot;
   }
@@ -229,13 +248,14 @@ export class VgpuRenderer implements GardenRenderer {
       : Math.min(0.12, Math.max(0, (timeMs - this.#lastRenderTimeMs) * 0.001));
     this.#lastRenderTimeMs = timeMs;
     this.#advanceVisualStages(deltaSeconds);
+    this.#advanceVisualWetness(deltaSeconds);
 
     const snapshot = this.#snapshot;
     const generation = this.#generation;
     const time = timeMs * 0.001;
     const camera = cameraFor(snapshot, generation.size);
     const lighting = lightingFor(snapshot.weather);
-    const wetness = snapshot.plots.map((plot) => plot.wetness);
+    const wetness = this.#visualWetness;
     const shared: SharedWorldUniforms = {
       viewProjection: camera.viewProjection,
       cameraPosition: [...camera.position, 1],
@@ -272,6 +292,17 @@ export class VgpuRenderer implements GardenRenderer {
         snapshot.weather.rain,
       ],
     });
+    const activeWateringPlot = this.#activeWateringPlot;
+    const wateringProgress = activeWateringPlot === null
+      ? 0
+      : this.#visualWetness[activeWateringPlot] ?? 0;
+    setWateringCanUniforms(
+      generation.wateringCan,
+      shared,
+      snapshot,
+      activeWateringPlot,
+      wateringProgress,
+    );
 
     generation.sky.set({
       viewport: [generation.size[0], generation.size[1], camera.aspect, camera.tanHalfFov],
@@ -311,12 +342,15 @@ export class VgpuRenderer implements GardenRenderer {
       );
       currentFrame.pass(
         { target: generation.sceneTarget, clear: false },
-        (pass: FramePass) => pass.bundles(
-          generation.staticBundle,
-          generation.soilBundle,
-          generation.cropBundle,
-          vegetationBundle,
-        ),
+        (pass: FramePass) => {
+          pass.bundles(
+            generation.staticBundle,
+            generation.soilBundle,
+            generation.cropBundle,
+            vegetationBundle,
+          );
+          pass.draw(generation.wateringCan);
+        },
       );
       currentFrame.pass(
         { target: this.#output, clear: [0.04, 0.06, 0.05, 1] },
@@ -344,9 +378,9 @@ export class VgpuRenderer implements GardenRenderer {
     return {
       kind: this.kind,
       passes: 3,
-      drawCalls: 7,
-      instances: this.#qualityProfile.vegetationInstances + CROP_INSTANCE_COUNT + 3,
-      resources: 16 + this.#generation.vegetationBundles.size,
+      drawCalls: 8,
+      instances: this.#qualityProfile.vegetationInstances + CROP_INSTANCE_COUNT + 4,
+      resources: 18 + this.#generation.vegetationBundles.size,
       dpr: Math.max(1, this.#canvas.width / Math.max(1, this.#canvas.clientWidth)),
     };
   }
@@ -368,6 +402,20 @@ export class VgpuRenderer implements GardenRenderer {
       const plot = this.#snapshot.plots[index];
       const target = plot?.crop && !plot.harvested ? plot.stage : 0;
       this.#visualStages[index] = advanceVisualStage(this.#visualStages[index] ?? target, target, deltaSeconds);
+    }
+  }
+
+  #advanceVisualWetness(deltaSeconds: number): void {
+    for (let index = 0; index < CROP_INSTANCE_COUNT; index += 1) {
+      const target = this.#snapshot.plots[index]?.wetness ?? 0;
+      const current = this.#visualWetness[index] ?? target;
+      this.#visualWetness[index] = advanceWettingVisual(current, target, index, deltaSeconds);
+    }
+    const active = this.#activeWateringPlot;
+    if (active !== null) {
+      const target = this.#snapshot.plots[active]?.wetness ?? 0;
+      const progress = this.#visualWetness[active] ?? 0;
+      if (target < 0.5 || progress >= 0.999) this.#activeWateringPlot = null;
     }
   }
 
@@ -456,6 +504,7 @@ async function createGeneration(
   let soilGeometry: Geometry | undefined;
   let cropGeometry: Geometry | undefined;
   let vegetationGeometry: Geometry | undefined;
+  let wateringCanGeometry: Geometry | undefined;
   let hardscape: HardscapeLayer | undefined;
 
   try {
@@ -523,6 +572,20 @@ async function createGeneration(
         },
       ],
     });
+    wateringCanGeometry = geometry(gpu, {
+      label: "garden-watering-can-procedural",
+      buffers: [
+        {
+          data: createWateringCanVertices().buffer,
+          stride: 28,
+          attributes: {
+            local_position: "float32x3",
+            local_normal: "float32x3",
+            part: "float32",
+          },
+        },
+      ],
+    });
 
     const ground = draw(gpu, {
       shader: gardenShader,
@@ -550,6 +613,13 @@ async function createGeneration(
       instances: settings.instances,
       cull: "none",
       label: `garden-vegetation-${settings.instances}`,
+    });
+    const wateringCan = draw(gpu, {
+      shader: gardenShader,
+      geometry: wateringCanGeometry,
+      instances: 1,
+      cull: "none",
+      label: "garden-watering-can",
     });
     const sky = effect(gpu, skyShader, { label: "garden-sky" });
     const blit = effect(gpu, blitShader, { label: "garden-blit" });
@@ -582,6 +652,7 @@ async function createGeneration(
       ...shared,
       scene: [0, snapshot.weather.cloudiness, snapshot.weather.sunlight, snapshot.weather.rain],
     });
+    setWateringCanUniforms(wateringCan, shared, snapshot, null, 0);
     hardscape = await createHardscapeLayer(gpu, sceneTarget, shared);
     const hardscapeLayer = hardscape;
     sky.set({
@@ -607,6 +678,7 @@ async function createGeneration(
       soil.compile(sceneTarget),
       crop.compile(sceneTarget),
       vegetation.compile(sceneTarget),
+      wateringCan.compile(sceneTarget),
       sky.compile(sceneTarget),
       blit.compile({ colors: [output.format] }),
     ]);
@@ -647,11 +719,13 @@ async function createGeneration(
       soilGeometry,
       cropGeometry,
       vegetationGeometry,
+      wateringCanGeometry,
       ground,
       soil,
       crop,
       hardscape: hardscapeLayer,
       vegetation,
+      wateringCan,
       sky,
       blit,
       staticBundle,
@@ -664,6 +738,7 @@ async function createGeneration(
     bestEffort(() => soilGeometry?.destroy());
     bestEffort(() => cropGeometry?.destroy());
     bestEffort(() => vegetationGeometry?.destroy());
+    bestEffort(() => wateringCanGeometry?.destroy());
     bestEffort(() => hardscape?.destroy());
     bestEffort(() => destroyTarget(sceneTarget));
     throw error;
@@ -681,6 +756,29 @@ function setWorldUniforms(
     cameraPosition: shared.cameraPosition,
     scene: shared.scene,
     weather: [snapshot.weather.rain, kind, 0, 0],
+    lightDirection: shared.lightDirection,
+    lightColor: shared.lightColor,
+    ambientColor: shared.ambientColor,
+    fogColor: shared.fogColor,
+    lightParams: shared.lightParams,
+    wet0: shared.wet0,
+    wet1: shared.wet1,
+    wet2: shared.wet2,
+  });
+}
+
+function setWateringCanUniforms(
+  drawable: Draw,
+  shared: SharedWorldUniforms,
+  snapshot: GardenSceneSnapshot,
+  activePlot: number | null,
+  progress: number,
+): void {
+  drawable.set({
+    viewProjection: shared.viewProjection,
+    cameraPosition: shared.cameraPosition,
+    scene: shared.scene,
+    weather: [snapshot.weather.rain, 4, activePlot ?? -1, progress],
     lightDirection: shared.lightDirection,
     lightColor: shared.lightColor,
     ambientColor: shared.ambientColor,
@@ -869,6 +967,7 @@ function cleanupGeneration(generation: Generation): void {
   bestEffort(() => generation.soilGeometry.destroy());
   bestEffort(() => generation.cropGeometry.destroy());
   bestEffort(() => generation.vegetationGeometry.destroy());
+  bestEffort(() => generation.wateringCanGeometry.destroy());
   bestEffort(() => generation.hardscape.destroy());
   bestEffort(() => destroyTarget(generation.sceneTarget));
 }
