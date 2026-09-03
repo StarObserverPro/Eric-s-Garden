@@ -1,0 +1,549 @@
+@media (max-width: 760px) and (orientation: portrait) {
+  :root {
+    --hud-left: max(10px, env(safe-area-inset-left));
+    --hud-right: max(10px, env(safe-area-inset-right));
+    --hud-xs: 5px;
+    --hud-sm: 8px;
+    --hud-md: 12px;
+    --hud-lg: 16px;
+    --hud-surface: rgba(255, 250, 240, .78);
+    --hud-surface-strong: rgba(255, 250, 240, .94);
+    --hud-border: rgba(43, 67, 50, .16);
+  }
+
+  html,
+  body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+    background: #a9bf77;
+  }
+
+  body.portrait-hud-active {
+    min-height: 100dvh;
+  }
+
+  .portrait-hud-active .app-shell {
+    position: relative;
+    width: 100vw;
+    height: 100dvh;
+    min-height: 0;
+    padding: 0;
+    overflow: hidden;
+  }
+
+  .portrait-hud-active .topbar,
+  .portrait-hud-active .mission-card {
+    display: none;
+  }
+
+  .portrait-hud-active .game-layout {
+    display: block;
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    margin: 0;
+  }
+
+  .portrait-hud-active .garden-stage {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    overflow: hidden;
+  }
+
+  .portrait-hud-active .garden-canvas {
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+  }
+
+  .portrait-top-hud {
+    position: fixed;
+    z-index: 30;
+    top: max(8px, env(safe-area-inset-top));
+    left: var(--hud-left);
+    right: var(--hud-right);
+    height: 50px;
+    display: grid;
+    grid-template-columns: 38px minmax(76px, 1fr) 64px 42px 42px;
+    align-items: center;
+    gap: var(--hud-xs);
+    padding: 6px;
+    border: 1px solid var(--hud-border);
+    border-radius: 18px;
+    background: var(--hud-surface);
+    box-shadow: 0 8px 26px rgba(36, 53, 39, .16);
+    backdrop-filter: blur(16px) saturate(1.08);
+    -webkit-backdrop-filter: blur(16px) saturate(1.08);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .portrait-top-hud .level-badge {
+    width: 38px;
+    min-width: 38px;
+    height: 38px;
+    min-height: 38px;
+    padding: 0;
+    display: grid;
+    place-items: center;
+    border-radius: 13px;
+    font-size: 17px;
+    line-height: 1;
+  }
+
+  .portrait-top-hud .mission-progress-row {
+    position: relative;
+    width: 100%;
+    height: 32px;
+    margin: 0;
+    display: block;
+    min-width: 0;
+  }
+
+  .portrait-top-hud .progress-track {
+    position: absolute;
+    inset: 0;
+    height: 32px;
+    border-radius: 11px;
+    background: rgba(60, 86, 65, .13);
+    border: 1px solid rgba(49, 78, 55, .08);
+    overflow: hidden;
+  }
+
+  .portrait-top-hud .progress-fill {
+    height: 100%;
+    border-radius: inherit;
+    opacity: .82;
+  }
+
+  .portrait-top-hud #levelProgress {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    display: grid;
+    place-items: center;
+    padding: 0 5px;
+    color: #213329;
+    font-size: 12px;
+    font-weight: 900;
+    letter-spacing: .01em;
+    white-space: nowrap;
+    pointer-events: none;
+  }
+
+  .portrait-top-hud .star-count {
+    width: 64px;
+    min-width: 64px;
+    height: 38px;
+    min-height: 38px;
+    padding: 0 6px;
+    justify-content: center;
+    border-radius: 13px;
+    font-size: 13px;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+
+  .portrait-top-hud .icon-btn,
+  .portrait-top-hud .pill-btn {
+    width: 42px;
+    min-width: 42px;
+    height: 38px;
+    min-height: 38px;
+    padding: 0;
+    display: grid;
+    place-items: center;
+    border-radius: 13px;
+    font-size: 19px;
+    line-height: 1;
+  }
+
+  .portrait-top-hud .pill-btn {
+    font-size: 20px;
+  }
+
+  .portrait-hud-active #weatherBadge {
+    display: none !important;
+  }
+
+  .portrait-hud-active .notebook-card {
+    position: fixed;
+    z-index: 42;
+    left: var(--hud-left);
+    right: var(--hud-right);
+    bottom: calc(88px + max(8px, env(safe-area-inset-bottom)));
+    width: auto;
+    max-height: min(72dvh, 560px);
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    padding: 0;
+    border-radius: 22px;
+    background: var(--hud-surface-strong);
+    border: 1px solid rgba(43, 67, 50, .18);
+    box-shadow: 0 24px 60px rgba(31, 47, 35, .28);
+    backdrop-filter: blur(22px) saturate(1.05);
+    -webkit-backdrop-filter: blur(22px) saturate(1.05);
+    transform: translateY(calc(100% + 110px));
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: transform .22s ease, opacity .18s ease, visibility .22s step-end;
+    overflow: hidden;
+    touch-action: pan-y;
+    user-select: text;
+  }
+
+  .portrait-hud-active .notebook-card.is-portrait-open {
+    transform: translateY(0);
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transition: transform .22s ease, opacity .18s ease, visibility 0s;
+  }
+
+  .portrait-hud-active .notebook-heading {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    flex: 0 0 auto;
+    min-height: 58px;
+    margin: 0;
+    padding: 12px 12px 9px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    border-bottom: 1px solid rgba(43, 67, 50, .10);
+    background: rgba(255, 250, 240, .96);
+  }
+
+  .portrait-hud-active .notebook-heading .eyebrow {
+    display: none;
+  }
+
+  .portrait-hud-active .notebook-heading h2 {
+    margin: 0;
+    font-size: 19px;
+    line-height: 1.15;
+  }
+
+  .portrait-notebook-close {
+    flex: 0 0 40px;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    border: 1px solid rgba(43, 67, 50, .12);
+    border-radius: 13px;
+    background: rgba(255,255,255,.58);
+    color: var(--ink);
+    font-size: 22px;
+    cursor: pointer;
+  }
+
+  .portrait-notebook-body {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
+    padding: 12px 14px calc(18px + env(safe-area-inset-bottom));
+    scrollbar-gutter: stable;
+  }
+
+  .portrait-notebook-section + .portrait-notebook-section {
+    margin-top: var(--hud-lg);
+    padding-top: var(--hud-md);
+    border-top: 1px solid rgba(43, 67, 50, .10);
+  }
+
+  .portrait-notebook-kicker {
+    margin: 0 0 5px;
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 850;
+    letter-spacing: .08em;
+  }
+
+  .portrait-notebook-goal .mission-label {
+    display: none;
+  }
+
+  .portrait-notebook-goal #missionTitle {
+    margin: 0 0 5px;
+    font-size: 19px;
+    line-height: 1.22;
+  }
+
+  .portrait-notebook-goal #missionHint {
+    margin: 0 0 10px;
+    font-size: 13px;
+    line-height: 1.42;
+  }
+
+  .portrait-notebook-goal .target-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+  }
+
+  .portrait-notebook-goal .status-strip {
+    margin-top: 9px;
+    gap: 6px;
+  }
+
+  .portrait-hud-active .event-log {
+    min-height: 0;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+
+  .portrait-hud-active .log-item {
+    padding: 8px 0;
+  }
+
+  .portrait-hud-active .unlock-box {
+    margin: 0;
+  }
+
+  .portrait-notebook-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 48px;
+    gap: 8px;
+  }
+
+  .portrait-notebook-stats,
+  .portrait-notebook-actions #resetBtn {
+    min-height: 44px;
+    border: 1px solid rgba(43, 67, 50, .12);
+    border-radius: 14px;
+    background: rgba(79, 122, 84, .09);
+    cursor: pointer;
+    font-weight: 820;
+  }
+
+  .portrait-notebook-actions #resetBtn {
+    width: 48px;
+    height: 44px;
+  }
+
+  .portrait-hud-active .render-panel {
+    position: static;
+    width: 100%;
+    margin: 0;
+    border-radius: 14px;
+    box-shadow: none;
+    background: rgba(79, 122, 84, .06);
+    border: 1px solid rgba(43, 67, 50, .10);
+    touch-action: pan-y;
+  }
+
+  .portrait-hud-active .render-panel summary {
+    min-height: 45px;
+    grid-template-columns: auto 1fr;
+    padding: 0 12px;
+    font-size: 13px;
+  }
+
+  .portrait-hud-active .render-panel summary #rendererName,
+  .portrait-hud-active .render-panel summary small {
+    display: none;
+  }
+
+  .portrait-hud-active .render-panel summary::after {
+    content: "画面帮助";
+    justify-self: start;
+    font-weight: 850;
+  }
+
+  .portrait-hud-active .render-panel-body {
+    padding: 10px 12px 12px;
+  }
+
+  .portrait-hud-active .render-panel label,
+  .portrait-hud-active .renderer-message,
+  .portrait-hud-active .diagnostic-grid,
+  .portrait-hud-active .render-note {
+    display: none !important;
+  }
+
+  .portrait-support-status {
+    margin: 0 0 9px;
+    font-size: 13px;
+    font-weight: 760;
+  }
+
+  .portrait-support-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+  }
+
+  .portrait-support-actions button,
+  .portrait-hud-active .render-retry {
+    min-height: 39px;
+    margin: 0;
+    border: 0;
+    border-radius: 11px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 820;
+  }
+
+  .portrait-support-actions button {
+    background: rgba(79, 122, 84, .12);
+  }
+
+  .portrait-hud-active .render-retry {
+    width: 100%;
+    margin-top: 7px;
+    background: var(--green-dark);
+    color: #fff;
+  }
+
+  .portrait-hud-active .control-deck {
+    z-index: 35;
+    left: var(--hud-left);
+    right: var(--hud-right);
+    bottom: max(8px, env(safe-area-inset-bottom));
+    transform: none;
+    width: auto;
+    height: 72px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(112px, 38%);
+    gap: 7px;
+    padding: 7px;
+    border-radius: 20px;
+    background: var(--hud-surface);
+    backdrop-filter: blur(18px) saturate(1.05);
+    -webkit-backdrop-filter: blur(18px) saturate(1.05);
+    box-shadow: 0 16px 38px rgba(31, 47, 35, .23);
+  }
+
+  .portrait-hud-active .tool-group {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 5px;
+  }
+
+  .portrait-hud-active .tool-btn {
+    min-width: 0;
+    min-height: 58px;
+    height: 58px;
+    padding: 0;
+    display: grid;
+    place-items: center;
+    border-radius: 14px;
+    text-align: center;
+  }
+
+  .portrait-hud-active .tool-btn > span {
+    grid-row: auto;
+    font-size: 25px;
+    line-height: 1;
+  }
+
+  .portrait-hud-active .tool-btn b,
+  .portrait-hud-active .tool-btn small {
+    display: none;
+  }
+
+  .portrait-hud-active .grow-btn {
+    min-width: 0;
+    width: 100%;
+    height: 58px;
+    min-height: 58px;
+    padding: 7px 9px;
+    grid-template-columns: 31px minmax(0, 1fr);
+    gap: 5px;
+    border-radius: 14px;
+  }
+
+  .portrait-hud-active .grow-btn > span:first-child {
+    font-size: 24px;
+  }
+
+  .portrait-hud-active .grow-btn b {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .portrait-hud-active #growSubLabel {
+    display: none;
+  }
+
+  .portrait-hud-active .stage-corner {
+    left: var(--hud-left);
+    bottom: calc(88px + max(8px, env(safe-area-inset-bottom)));
+    max-width: 58%;
+    animation: portrait-hint-out .35s ease 6s forwards;
+  }
+
+  .portrait-hud-active .stage-corner span {
+    background: rgba(255, 251, 238, .68);
+    font-size: 10px;
+  }
+
+  .portrait-hud-active .stage-corner span:nth-child(2) {
+    display: none;
+  }
+
+  .portrait-hud-active .toast {
+    top: calc(max(8px, env(safe-area-inset-top)) + 58px);
+    max-width: calc(100% - var(--hud-left) - var(--hud-right) - 20px);
+  }
+
+  .portrait-hud-active .dialog-card {
+    max-width: calc(100vw - 18px);
+    max-height: calc(100dvh - 18px);
+  }
+
+  @keyframes portrait-hint-out {
+    to {
+      opacity: 0;
+      transform: translateY(4px);
+      visibility: hidden;
+    }
+  }
+}
+
+@media (max-width: 360px) and (orientation: portrait) {
+  .portrait-top-hud {
+    grid-template-columns: 36px minmax(66px, 1fr) 58px 38px 38px;
+    gap: 4px;
+    padding: 5px;
+  }
+
+  .portrait-top-hud .level-badge {
+    width: 36px;
+    min-width: 36px;
+    height: 36px;
+    min-height: 36px;
+  }
+
+  .portrait-top-hud .star-count {
+    width: 58px;
+    min-width: 58px;
+    font-size: 12px;
+  }
+
+  .portrait-top-hud .icon-btn,
+  .portrait-top-hud .pill-btn {
+    width: 38px;
+    min-width: 38px;
+  }
+
+  .portrait-hud-active .control-deck {
+    grid-template-columns: minmax(0, 1fr) 108px;
+  }
+}
