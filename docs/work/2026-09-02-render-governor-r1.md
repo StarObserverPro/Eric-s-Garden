@@ -26,13 +26,14 @@ Add one runtime-owned, hysteretic render-budget governor that can reduce non-cor
 
 ## Current state
 - Completed: A1, A2, A3, A4, A5.
-- Current step: PR #8 review.
-- Next action: merge after final-head Verify; if PR #7 lands first, replay the vegetation-only renderer seam onto the hardscape renderer rather than restoring obsolete path/fence code.
-- Blocker: PR #7 independently edits `vgpu-renderer.ts`; merge order may require a narrow conflict replay.
+- Current step: PR #8 review on current main.
+- Next action: merge after final-head Verify.
+- Blocker: none. PR #7 merged as main `9225b283517f8b0d87e0aaee7b64b529691a7854`; merge commit `37277c34127344c629315d0aee0d5ce4a03155d3` preserved the new hardscape owner and replayed only the vegetation governor seam.
 
 ## Evidence
 - PR #8: `Add dynamic WebGPU render governor`.
 - Verify run `33713767035` passed shader/model/mock/Node/production checks plus deterministic soil, vgpu meadow and Canvas fallback evidence on code head `99378d93325016c6f723c1538449be1573a06965`.
+- Main replay merge `37277c34127344c629315d0aee0d5ce4a03155d3` has both PR #8 and current main as parents; resolved `vgpu-renderer.ts` keeps `HardscapeLayer` creation/update/disposal and adds only runtime-selectable vegetation bundles.
 - `tests/render-governor.test.ts` covers severe/mild degradation, slow recovery, user ceiling and hidden-gap sampling reset.
 - `tests/vgpu-quality-bundles.test.ts` replays prepared 500 / 1,500 / 4,000 bundle variants against one shared draw and rejects an unprepared tier.
 - Final diff keeps one RAF owner, one WebGPU context and changes runtime vegetation load by bundle selection rather than renderer recreation.
