@@ -10,6 +10,12 @@ export interface WeatherProfile {
   readonly cloudiness: number;
   readonly wind: number;
   readonly rain: number;
+  readonly sunElevation: number;
+  readonly sunColor: Vec3;
+  readonly ambientColor: Vec3;
+  readonly fogColor: Vec3;
+  readonly fogDensity: number;
+  readonly exposure: number;
 }
 
 export interface ScenePlot {
@@ -35,48 +41,78 @@ export interface GardenSceneSnapshot {
 const WEATHER: readonly WeatherProfile[] = [
   {
     id: "sunny",
-    skyTop: [0.53, 0.73, 0.83],
-    skyHorizon: [0.91, 0.85, 0.61],
+    skyTop: [0.43, 0.64, 0.78],
+    skyHorizon: [0.95, 0.75, 0.50],
     sunlight: 1,
     cloudiness: 0.14,
     wind: 0.28,
     rain: 0,
+    sunElevation: 0.28,
+    sunColor: [1, 0.76, 0.42],
+    ambientColor: [0.46, 0.58, 0.63],
+    fogColor: [0.74, 0.77, 0.70],
+    fogDensity: 0.022,
+    exposure: 1.05,
   },
   {
     id: "partly-cloudy",
-    skyTop: [0.55, 0.7, 0.76],
-    skyHorizon: [0.86, 0.82, 0.64],
+    skyTop: [0.48, 0.66, 0.76],
+    skyHorizon: [0.89, 0.75, 0.56],
     sunlight: 0.84,
     cloudiness: 0.38,
     wind: 0.4,
     rain: 0,
+    sunElevation: 0.35,
+    sunColor: [1, 0.82, 0.56],
+    ambientColor: [0.48, 0.58, 0.62],
+    fogColor: [0.73, 0.74, 0.68],
+    fogDensity: 0.024,
+    exposure: 1.02,
   },
   {
     id: "cloudy",
-    skyTop: [0.48, 0.6, 0.64],
-    skyHorizon: [0.72, 0.72, 0.63],
+    skyTop: [0.42, 0.54, 0.62],
+    skyHorizon: [0.67, 0.69, 0.66],
     sunlight: 0.62,
     cloudiness: 0.72,
     wind: 0.44,
     rain: 0,
+    sunElevation: 0.48,
+    sunColor: [0.91, 0.91, 0.82],
+    ambientColor: [0.43, 0.51, 0.57],
+    fogColor: [0.61, 0.66, 0.66],
+    fogDensity: 0.03,
+    exposure: 1,
   },
   {
     id: "breezy",
-    skyTop: [0.54, 0.72, 0.79],
-    skyHorizon: [0.84, 0.82, 0.63],
+    skyTop: [0.35, 0.56, 0.72],
+    skyHorizon: [0.95, 0.66, 0.38],
     sunlight: 0.82,
     cloudiness: 0.35,
     wind: 1,
     rain: 0,
+    sunElevation: 0.17,
+    sunColor: [1, 0.70, 0.36],
+    ambientColor: [0.43, 0.52, 0.60],
+    fogColor: [0.77, 0.65, 0.52],
+    fogDensity: 0.025,
+    exposure: 1.06,
   },
   {
     id: "sunshower",
-    skyTop: [0.43, 0.63, 0.72],
-    skyHorizon: [0.82, 0.78, 0.58],
+    skyTop: [0.38, 0.57, 0.68],
+    skyHorizon: [0.86, 0.70, 0.47],
     sunlight: 0.72,
     cloudiness: 0.62,
     wind: 0.68,
     rain: 0.58,
+    sunElevation: 0.12,
+    sunColor: [1, 0.72, 0.41],
+    ambientColor: [0.42, 0.53, 0.59],
+    fogColor: [0.68, 0.67, 0.59],
+    fogDensity: 0.033,
+    exposure: 1.03,
   },
 ] as const;
 

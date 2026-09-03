@@ -2,6 +2,11 @@ struct Uniforms {
   viewProjection: mat4x4f,
   cameraPosition: vec4f,
   scene: vec4f,
+  lightDirection: vec4f,
+  lightColor: vec4f,
+  ambientColor: vec4f,
+  fogColor: vec4f,
+  lightParams: vec4f,
   wet0: vec4f,
   wet1: vec4f,
   wet2: vec4f,
@@ -120,16 +125,14 @@ fn fs_main(input: VertexOut) -> @location(0) vec4f {
     base = mix(base, vec3f(0.48, 0.39, 0.24), 0.22);
   }
 
-  // Wetness remains a compatibility input here; spatial propagation belongs to the later wetting worklet.
   base = mix(base, base * vec3f(0.64, 0.67, 0.68), moisture * 0.34);
 
-  let light_direction = normalize(vec3f(-0.48, 0.86, -0.31));
+  let light_direction = normalize(uniforms.lightDirection.xyz);
   let view_direction = normalize(uniforms.cameraPosition.xyz - input.world);
   let half_direction = normalize(light_direction + view_direction);
   let n_dot_l = max(dot(normal, light_direction), 0.0);
   let n_dot_v = max(dot(normal, view_direction), 0.0);
   let n_dot_h = max(dot(normal, half_direction), 0.0);
-  let sunlight = uniforms.scene.z;
 
   let dry_roughness = select(select(0.88, 0.78, is_clod), 0.62, is_pebble);
   let roughness = mix(dry_roughness, 0.50, moisture * 0.58);
@@ -139,14 +142,22 @@ fn fs_main(input: VertexOut) -> @location(0) vec4f {
   let specular = pow(n_dot_h, specular_power) * specular_strength * mix(0.55, 1.0, fresnel);
 
   let upward = clamp(normal.y * 0.5 + 0.5, 0.0, 1.0);
-  let hemisphere = mix(vec3f(0.15, 0.12, 0.09), vec3f(0.32, 0.34, 0.27), upward);
-  let diffuse_light = vec3f(1.0, 0.88, 0.70) * (0.54 + sunlight * 0.52);
+  let ground_bounce = vec3f(0.18, 0.12, 0.08) * (1.0 - upward) * 0.18;
+  let ambient = uniforms.ambientColor.rgb * (0.54 + upward * 0.28) + ground_bounce;
+  let direct = uniforms.lightColor.rgb * uniforms.lightParams.x;
   let shadow = cloud_shadow(input.world);
-  var color = base * (hemisphere + diffuse_light * n_dot_l * 0.72) * shadow;
-  color += diffuse_light * specular * shadow;
+  var color = base * (ambient + direct * n_dot_l * 0.78) * shadow;
+  color += direct * specular * shadow;
 
   if (is_clod && !is_pebble) {
     color *= 0.94 + n_dot_l * 0.10;
   }
+
+  let rain = uniforms.lightParams.z;
+  let luma = dot(color, vec3f(0.299, 0.587, 0.114));
+  color = mix(color, vec3f(luma) * vec3f(0.90, 0.96, 1.02), rain * 0.07);
+  let distance_to_camera = length(input.world - uniforms.cameraPosition.xyz);
+  let fog_amount = 1.0 - exp(-pow(distance_to_camera * uniforms.lightParams.y, 2.0));
+  color = mix(color, uniforms.fogColor.rgb, clamp(fog_amount, 0.0, 0.62));
   return vec4f(color, 1.0);
 }
