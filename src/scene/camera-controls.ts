@@ -41,6 +41,18 @@ export function maxCameraZoom(viewportWidth: number, viewportHeight: number): nu
   );
 }
 
+export function maxCanvasCameraZoom(viewportWidth: number, viewportHeight: number): number {
+  const width = Math.max(1, viewportWidth);
+  const height = Math.max(1, viewportHeight);
+  const scale = Math.min(width / 13.4, height / 9.6);
+  const plotScreenFraction = PLOT_DIAGONAL * scale / width;
+  return clamp(
+    TARGET_PLOT_SCREEN_WIDTH / Math.max(0.001, plotScreenFraction),
+    CAMERA_DOLLY_ZOOM_MAX,
+    ABSOLUTE_ZOOM_MAX,
+  );
+}
+
 export function clampCameraZoom(
   zoom: number,
   viewportWidth: number,
