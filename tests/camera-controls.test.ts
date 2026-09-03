@@ -10,6 +10,7 @@ import {
   clampCameraElevation,
   clampCameraZoom,
   maxCameraZoom,
+  maxCanvasCameraZoom,
 } from "../src/scene/camera-controls";
 
 describe("camera controls", () => {
@@ -29,6 +30,16 @@ describe("camera controls", () => {
     expect(phone).toBeGreaterThan(2.6);
     expect(phone).toBeLessThan(2.9);
     expect(desktop).toBeGreaterThan(phone * 3);
+  });
+
+  it("calibrates the Canvas fallback independently for its isometric projection", () => {
+    const desktop = maxCanvasCameraZoom(1920, 1080);
+    const phone = maxCanvasCameraZoom(390, 844);
+
+    expect(desktop).toBeGreaterThan(9);
+    expect(desktop).toBeLessThan(9.3);
+    expect(phone).toBeGreaterThan(7);
+    expect(phone).toBeLessThan(7.3);
   });
 
   it("uses optical zoom after the old 1.35 dolly ceiling", () => {
