@@ -36,6 +36,11 @@ jobs:
           mkdir -p browser-evidence
           MEADOW_EVIDENCE_PATH=browser-evidence/meadow-node.ppm npx vitest run tests/meadow-render-node.test.ts
           test -s browser-evidence/meadow-node.ppm
+      - name: Capture VGPU hardscape evidence
+        run: |
+          mkdir -p browser-evidence
+          HARDSCAPE_EVIDENCE_PATH=browser-evidence/hardscape-node.ppm npx vitest run tests/hardscape-render-node.test.ts
+          test -s browser-evidence/hardscape-node.ppm
       - name: Capture the playable Canvas fallback
         run: |
           mkdir -p browser-evidence
