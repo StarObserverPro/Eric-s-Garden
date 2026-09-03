@@ -25,11 +25,7 @@ jobs:
       - name: Prove the headless renderer is healthy
         run: npx vgpu doctor --pretty
       - name: Shader, model, mock, Node and production checks
-        shell: bash
-        run: |
-          mkdir -p browser-evidence
-          set -o pipefail
-          npm run check 2>&1 | tee browser-evidence/check.log
+        run: npm run check
       - name: Capture deterministic soil evidence
         run: |
           mkdir -p browser-evidence
@@ -40,6 +36,11 @@ jobs:
           mkdir -p browser-evidence
           MEADOW_EVIDENCE_PATH=browser-evidence/meadow-node.ppm npx vitest run tests/meadow-render-node.test.ts
           test -s browser-evidence/meadow-node.ppm
+      - name: Capture VGPU hardscape evidence
+        run: |
+          mkdir -p browser-evidence
+          HARDSCAPE_EVIDENCE_PATH=browser-evidence/hardscape-node.ppm npx vitest run tests/hardscape-render-node.test.ts
+          test -s browser-evidence/hardscape-node.ppm
       - name: Capture the playable Canvas fallback
         run: |
           mkdir -p browser-evidence
