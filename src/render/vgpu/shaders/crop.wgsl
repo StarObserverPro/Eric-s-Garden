@@ -154,9 +154,9 @@ fn vs_main(input: VertexIn) -> VertexOut {
       (1.0 - smoothstep(0.18 * whole_scale, 0.38 * whole_scale, fruit_distance)) *
       (1.0 - smoothstep(0.24, 0.42, local.y));
     let clearance_direction = fruit_offset / fruit_distance;
-    local.x += clearance_direction.x * clearance * 0.075 * whole_scale;
-    local.z += clearance_direction.y * clearance * 0.075 * whole_scale;
-    local.y += clearance * 0.055 * whole_scale;
+    local.x += clearance_direction.x * clearance * 0.090 * whole_scale;
+    local.z += clearance_direction.y * clearance * 0.090 * whole_scale;
+    local.y += clearance * 0.065 * whole_scale;
   }
 
   // Keep the existing triangle carrier but spend vertex deformation on visible botanical silhouette.
@@ -170,23 +170,33 @@ fn vs_main(input: VertexIn) -> VertexOut {
     local.z = tapered_xz.y;
   }
 
-  // Inner lettuce leaves turn upward and inward instead of reading as a flat lotus ring.
+  // Lettuce leaves remain individually attached but avoid mechanically concentric rings.
+  // Every leaf gets one coherent yaw/length variation from its shared base anchor; inner leaves also curl inward.
   if ((crop_kind > 3.5) && (crop_kind < 4.5) && is_foliage) {
     let base_radius = length(input.anchor.xz);
+    let leaf_seed = hash21(input.anchor.xz * 173.0 + vec2f(base_radius * 91.0, 7.0));
+    let yaw_jitter = (leaf_seed - 0.5) * 0.34;
+    let c = cos(yaw_jitter);
+    let s = sin(yaw_jitter);
+    let rotated_xz = vec2f(local.x * c - local.z * s, local.x * s + local.z * c);
+    let radial_scale = 0.94 + leaf_seed * 0.12;
+    local.x = rotated_xz.x * radial_scale;
+    local.z = rotated_xz.y * radial_scale;
+
     let inner_leaf = 1.0 - smoothstep(0.040, 0.066, base_radius);
     let radial_distance = length(local.xz);
     let body = smoothstep(0.07 * whole_scale, 0.22 * whole_scale, radial_distance);
-    let curled_xz = local.xz * (1.0 - inner_leaf * body * 0.24);
+    let curled_xz = local.xz * (1.0 - inner_leaf * body * (0.22 + leaf_seed * 0.08));
     local.x = curled_xz.x;
     local.z = curled_xz.y;
-    local.y += inner_leaf * body * 0.055 * whole_scale;
+    local.y += inner_leaf * body * (0.045 + leaf_seed * 0.020) * whole_scale;
   }
 
   // The top corn blades stay subordinate to the terminal tassel rather than forming a green cone around it.
   if ((crop_kind > 1.5) && (crop_kind < 2.5) && is_foliage) {
     let upper_leaf = smoothstep(1.05, 1.48, input.anchor.y);
     let scaled_anchor = input.anchor.xz * whole_scale;
-    let shortened_xz = scaled_anchor + (local.xz - scaled_anchor) * (1.0 - upper_leaf * 0.24);
+    let shortened_xz = scaled_anchor + (local.xz - scaled_anchor) * (1.0 - upper_leaf * 0.34);
     local.x = shortened_xz.x;
     local.z = shortened_xz.y;
   }
@@ -221,13 +231,13 @@ fn foliage_color(crop: f32, variation: f32) -> vec3f {
   if (crop < 0.5) {
     color = vec3f(0.17, 0.48, 0.115);
   } else if (crop < 1.5) {
-    color = vec3f(0.16, 0.46, 0.10);
+    color = vec3f(0.20, 0.50, 0.12);
   } else if (crop < 2.5) {
     color = vec3f(0.24, 0.52, 0.12);
   } else if (crop < 3.5) {
     color = vec3f(0.19, 0.49, 0.10);
   } else if (crop < 4.5) {
-    color = vec3f(0.34, 0.62, 0.17);
+    color = vec3f(0.31, 0.57, 0.16);
   } else {
     color = vec3f(0.19, 0.49, 0.11);
   }
@@ -239,7 +249,7 @@ fn foliage_roughness(crop: f32) -> f32 {
   if (crop < 1.5) { return 0.82; } // tomato: visibly hairy / matte
   if (crop < 2.5) { return 0.52; } // corn: moderately waxy blade
   if (crop < 3.5) { return 0.86; } // pumpkin: coarse, scabrous leaf
-  if (crop < 4.5) { return 0.61; } // lettuce: hydrated but not glossy plastic
+  if (crop < 4.5) { return 0.66; } // lettuce: hydrated, broad matte cuticle
   return 0.56; // strawberry: modest cuticular sheen
 }
 
@@ -248,7 +258,7 @@ fn foliage_transmission(crop: f32) -> f32 {
   if (crop < 1.5) { return 0.40; }
   if (crop < 2.5) { return 0.46; }
   if (crop < 3.5) { return 0.34; }
-  if (crop < 4.5) { return 0.60; }
+  if (crop < 4.5) { return 0.52; }
   return 0.50;
 }
 
@@ -263,11 +273,11 @@ fn foliage_specular_scale(crop: f32) -> f32 {
 
 fn foliage_ambient(crop: f32) -> f32 {
   if (crop < 0.5) { return 0.72; }
-  if (crop < 1.5) { return 0.79; }
+  if (crop < 1.5) { return 0.84; }
   if (crop < 2.5) { return 0.69; }
   if (crop < 3.5) { return 0.74; }
-  if (crop < 4.5) { return 0.74; }
-  return 0.75;
+  if (crop < 4.5) { return 0.70; }
+  return 0.77;
 }
 
 fn stem_roughness(crop: f32) -> f32 {
@@ -290,11 +300,20 @@ fn harvest_roughness(crop: f32) -> f32 {
 
 fn harvest_scatter(crop: f32) -> f32 {
   if (crop < 0.5) { return 0.025; }
-  if (crop < 1.5) { return 0.080; }
+  if (crop < 1.5) { return 0.085; }
   if (crop < 2.5) { return 0.035; }
   if (crop < 3.5) { return 0.055; }
-  if (crop > 4.5) { return 0.110; }
+  if (crop > 4.5) { return 0.125; }
   return 0.030;
+}
+
+fn harvest_f0(crop: f32) -> f32 {
+  if (crop < 0.5) { return 0.030; }
+  if (crop < 1.5) { return 0.045; }
+  if (crop < 2.5) { return 0.040; }
+  if (crop < 3.5) { return 0.036; }
+  if (crop > 4.5) { return 0.042; }
+  return 0.035;
 }
 
 fn harvest_color(crop: f32, stage: f32, variation: f32) -> vec3f {
@@ -343,9 +362,15 @@ fn fs_main(input: VertexOut, @builtin(front_facing) front_facing: bool) -> @loca
     backlight_strength = 0.08;
     ambient_strength = 0.62;
     surface_specular_scale = select(0.36, 0.62, (crop > 1.5) && (crop < 2.5));
+    if ((crop > 0.5) && (crop < 1.5)) {
+      albedo = foliage_color(crop, variation) * vec3f(0.78, 0.86, 0.70);
+      ambient_strength = 0.69;
+      direct_floor = 0.088;
+    }
     if ((crop > 2.5) && (crop < 3.5)) {
-      albedo = vec3f(0.30, 0.49, 0.085) * (0.92 + variation * 0.15);
-      direct_floor = 0.090;
+      albedo = vec3f(0.34, 0.54, 0.10) * (0.92 + variation * 0.15);
+      ambient_strength = 0.67;
+      direct_floor = 0.096;
     }
   } else if (is_harvest) {
     albedo = harvest_color(crop, input.stage, variation);
@@ -354,7 +379,7 @@ fn fs_main(input: VertexOut, @builtin(front_facing) front_facing: bool) -> @loca
     ambient_strength = 0.58;
     if ((crop > 0.5) && (crop < 1.5)) { ambient_strength = 0.62; }
     if ((crop > 2.5) && (crop < 3.5)) { ambient_strength = 0.60; }
-    if (crop > 4.5) { ambient_strength = 0.64; }
+    if (crop > 4.5) { ambient_strength = 0.68; }
     direct_floor = 0.090;
     surface_specular_scale = 1.0;
   } else if (is_blossom) {
@@ -394,8 +419,8 @@ fn fs_main(input: VertexOut, @builtin(front_facing) front_facing: bool) -> @loca
   if (is_foliage && (crop > 3.5) && (crop < 4.5)) {
     let crown_radius = length(input.local_surface.xz);
     let inner_head = (1.0 - smoothstep(0.10, 0.27, crown_radius)) * smoothstep(0.05, 0.23, input.local_surface.y);
-    albedo = mix(albedo, vec3f(0.45, 0.65, 0.22), inner_head * 0.28);
-    backlight_strength += inner_head * 0.07;
+    albedo = mix(albedo, vec3f(0.43, 0.60, 0.21), inner_head * 0.18);
+    backlight_strength += inner_head * 0.035;
   }
 
   // Carrot shoulder sees light and air; buried root remains duller and slightly earth-muted.
@@ -458,6 +483,10 @@ fn fs_main(input: VertexOut, @builtin(front_facing) front_facing: bool) -> @loca
     let leaf_fresnel = 0.025 + 0.075 * pow(1.0 - n_dot_v, 5.0);
     let leaf_specular = pow(n_dot_h, leaf_spec_power) * (0.012 + (1.0 - roughness) * 0.065) * surface_specular_scale;
     color += uniforms.lightColor.rgb * leaf_specular * (0.72 + leaf_fresnel) * uniforms.lightParams.x * shadow;
+    if ((crop > 0.5) && (crop < 1.5)) {
+      let velvet = pow(1.0 - n_dot_v, 2.0) * 0.055;
+      color += albedo * uniforms.ambientColor.rgb * velvet;
+    }
   }
 
   if (is_stem) {
@@ -468,9 +497,10 @@ fn fs_main(input: VertexOut, @builtin(front_facing) front_facing: bool) -> @loca
 
   if (is_harvest) {
     let spec_power = mix(12.0, 86.0, 1.0 - roughness);
-    let fresnel = 0.035 + 0.965 * pow(1.0 - n_dot_v, 5.0);
+    let f0 = harvest_f0(crop);
+    let fresnel = f0 + (1.0 - f0) * pow(1.0 - n_dot_v, 5.0);
     let specular = pow(n_dot_h, spec_power);
-    let specular_strength = (0.028 + (1.0 - roughness) * 0.24) * mix(0.52, 1.0, fresnel);
+    let specular_strength = (0.035 + (1.0 - roughness) * 0.23) * mix(0.46, 1.0, fresnel);
     color += uniforms.lightColor.rgb * specular * specular_strength * uniforms.lightParams.x * shadow;
 
     // Dense fruit/root tissue only gets a shallow wrap/backscatter cue, never leaf-like through-transmission.
