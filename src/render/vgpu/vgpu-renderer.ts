@@ -25,6 +25,7 @@ import { CROPS } from "../../game/model";
 import type { GardenSceneSnapshot, Vec3, WeatherProfile } from "../../scene/snapshot";
 import type { GardenRenderer, RenderSettings, RendererMetrics } from "../contract";
 import { createBoxVertices, createVegetationVertices } from "./geometry";
+import { createHardscapeLayer, type HardscapeLayer } from "./hardscape";
 import { observeDeviceLoss } from "./raw/device-loss";
 import { createSoilGeometryData } from "./soil-geometry";
 import blitShader from "./shaders/blit.wgsl";
@@ -47,8 +48,7 @@ interface Generation {
   readonly vegetationGeometry: Geometry;
   readonly ground: Draw;
   readonly soil: Draw;
-  readonly path: Draw;
-  readonly fence: Draw;
+  readonly hardscape: HardscapeLayer;
   readonly vegetation: Draw;
   readonly sky: Effect;
   readonly blit: Effect;
@@ -201,8 +201,7 @@ export class VgpuRenderer implements GardenRenderer {
       wet2: wetness.slice(8, 12),
     };
     setWorldUniforms(generation.ground, shared, snapshot, 0);
-    setWorldUniforms(generation.path, shared, snapshot, 2);
-    setWorldUniforms(generation.fence, shared, snapshot, 3);
+    generation.hardscape.set(shared);
     setVegetationUniforms(generation.vegetation, shared);
     setSoilUniforms(generation.soil, {
       ...shared,
@@ -279,8 +278,8 @@ export class VgpuRenderer implements GardenRenderer {
     return {
       kind: this.kind,
       passes: 3,
-      drawCalls: 7,
-      instances: this.#settings.instances + 66,
+      drawCalls: 6,
+      instances: this.#settings.instances + 3,
       resources: 15,
       dpr: Math.max(1, this.#canvas.width / Math.max(1, this.#canvas.clientWidth)),
     };
@@ -383,6 +382,7 @@ async function createGeneration(
   let boxGeometry: Geometry | undefined;
   let soilGeometry: Geometry | undefined;
   let vegetationGeometry: Geometry | undefined;
+  let hardscape: HardscapeLayer | undefined;
 
   try {
     boxGeometry = geometry(gpu, {
@@ -444,20 +444,6 @@ async function createGeneration(
       cull: "none",
       label: "garden-soil-high-density",
     });
-    const path = draw(gpu, {
-      shader: gardenShader,
-      geometry: boxGeometry,
-      instances: 28,
-      cull: "back",
-      label: "garden-path",
-    });
-    const fence = draw(gpu, {
-      shader: gardenShader,
-      geometry: boxGeometry,
-      instances: 36,
-      cull: "back",
-      label: "garden-fence",
-    });
     const vegetation = draw(gpu, {
       shader: vegetationShader,
       geometry: vegetationGeometry,
@@ -490,13 +476,13 @@ async function createGeneration(
       wet2: emptyWet,
     };
     setWorldUniforms(ground, shared, snapshot, 0);
-    setWorldUniforms(path, shared, snapshot, 2);
-    setWorldUniforms(fence, shared, snapshot, 3);
     setVegetationUniforms(vegetation, shared);
     setSoilUniforms(soil, {
       ...shared,
       scene: [0, snapshot.weather.cloudiness, snapshot.weather.sunlight, snapshot.weather.rain],
     });
+    hardscape = await createHardscapeLayer(gpu, sceneTarget, shared);
+    const hardscapeLayer = hardscape;
     sky.set({
       viewport: [size[0], size[1], camera.aspect, camera.tanHalfFov],
       skyTop: [...snapshot.weather.skyTop, 1],
@@ -518,8 +504,6 @@ async function createGeneration(
     await Promise.all([
       ground.compile(sceneTarget),
       soil.compile(sceneTarget),
-      path.compile(sceneTarget),
-      fence.compile(sceneTarget),
       vegetation.compile(sceneTarget),
       sky.compile(sceneTarget),
       blit.compile(output),
@@ -530,8 +514,7 @@ async function createGeneration(
       { target: sceneTarget, label: "garden-static" },
       (recorded: BundleRecorder) => {
         recorded.draw(ground);
-        recorded.draw(path);
-        recorded.draw(fence);
+        recorded.draw(hardscapeLayer.draw);
       },
     );
     const soilBundle = bundle(
@@ -553,8 +536,7 @@ async function createGeneration(
       vegetationGeometry,
       ground,
       soil,
-      path,
-      fence,
+      hardscape: hardscapeLayer,
       vegetation,
       sky,
       blit,
@@ -566,6 +548,7 @@ async function createGeneration(
     bestEffort(() => boxGeometry?.destroy());
     bestEffort(() => soilGeometry?.destroy());
     bestEffort(() => vegetationGeometry?.destroy());
+    bestEffort(() => hardscape?.destroy());
     bestEffort(() => destroyTarget(sceneTarget));
     throw error;
   }
@@ -731,6 +714,7 @@ function cleanupGeneration(generation: Generation): void {
   bestEffort(() => generation.boxGeometry.destroy());
   bestEffort(() => generation.soilGeometry.destroy());
   bestEffort(() => generation.vegetationGeometry.destroy());
+  bestEffort(() => generation.hardscape.destroy());
   bestEffort(() => destroyTarget(generation.sceneTarget));
 }
 
