@@ -88,15 +88,15 @@ describe("frame cadence sampler", () => {
     expect(summary.p95FrameMs).toBe(16);
   });
 
-  test("ignores implausibly long cadence gaps", () => {
+  test("caps severe cadence gaps instead of hiding real stalls", () => {
     const sampler = new FrameCadenceSampler();
     sampler.record(0);
     sampler.record(16);
     sampler.record(1_000);
     sampler.record(1_016);
     const summary = sampler.summary();
-    expect(summary.sampleCount).toBe(2);
+    expect(summary.sampleCount).toBe(3);
     expect(summary.p50FrameMs).toBe(16);
-    expect(summary.p95FrameMs).toBe(16);
+    expect(summary.p95FrameMs).toBe(250);
   });
 });
