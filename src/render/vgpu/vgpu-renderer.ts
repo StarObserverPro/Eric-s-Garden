@@ -26,9 +26,11 @@ import type { GardenSceneSnapshot } from "../../scene/snapshot";
 import type { GardenRenderer, RenderSettings, RendererMetrics } from "../contract";
 import { createBoxVertices, createVegetationVertices } from "./geometry";
 import { observeDeviceLoss } from "./raw/device-loss";
+import { createSoilGeometryData } from "./soil-geometry";
 import blitShader from "./shaders/blit.wgsl";
 import gardenShader from "./shaders/garden.wgsl";
 import skyShader from "./shaders/sky.wgsl";
+import soilShader from "./shaders/soil.wgsl";
 
 interface CropMarker {
   readonly root: HTMLSpanElement;
@@ -40,6 +42,7 @@ interface Generation {
   readonly size: readonly [number, number];
   readonly sceneTarget: Target;
   readonly boxGeometry: Geometry;
+  readonly soilGeometry: Geometry;
   readonly vegetationGeometry: Geometry;
   readonly ground: Draw;
   readonly soil: Draw;
@@ -58,6 +61,11 @@ interface ProjectedPlot {
   readonly x: number;
   readonly y: number;
   readonly radius: number;
+}
+
+interface CameraState {
+  readonly viewProjection: ArrayLike<number>;
+  readonly position: readonly [number, number, number];
 }
 
 export class VgpuRenderer implements GardenRenderer {
@@ -156,10 +164,22 @@ export class VgpuRenderer implements GardenRenderer {
       wet2: wetness.slice(8, 12),
     };
     setWorldUniforms(generation.ground, shared, snapshot, 0);
-    setWorldUniforms(generation.soil, shared, snapshot, 1);
     setWorldUniforms(generation.path, shared, snapshot, 2);
     setWorldUniforms(generation.fence, shared, snapshot, 3);
     setWorldUniforms(generation.vegetation, shared, snapshot, 4);
+    setSoilUniforms(generation.soil, {
+      viewProjection: camera.viewProjection,
+      cameraPosition: [...camera.position, 1],
+      scene: [
+        time,
+        snapshot.weather.cloudiness,
+        snapshot.weather.sunlight,
+        snapshot.weather.rain,
+      ],
+      wet0: shared.wet0,
+      wet1: shared.wet1,
+      wet2: shared.wet2,
+    });
 
     generation.sky.set({
       resolution: generation.size,
@@ -221,8 +241,8 @@ export class VgpuRenderer implements GardenRenderer {
       kind: this.kind,
       passes: 3,
       drawCalls: 7,
-      instances: this.#settings.instances + 77,
-      resources: 14,
+      instances: this.#settings.instances + 66,
+      resources: 15,
       dpr: Math.max(1, this.#canvas.width / Math.max(1, this.#canvas.clientWidth)),
     };
   }
@@ -322,6 +342,7 @@ async function createGeneration(
     depth: true,
   });
   let boxGeometry: Geometry | undefined;
+  let soilGeometry: Geometry | undefined;
   let vegetationGeometry: Geometry | undefined;
 
   try {
@@ -335,6 +356,23 @@ async function createGeneration(
             local_position: "float32x3",
             local_normal: "float32x3",
             part: "float32",
+          },
+        },
+      ],
+    });
+    const soilData = createSoilGeometryData();
+    soilGeometry = geometry(gpu, {
+      label: `garden-soil-${soilData.stats.triangleCount}-triangles`,
+      buffers: [
+        {
+          data: soilData.data.buffer,
+          stride: 36,
+          attributes: {
+            position: "float32x3",
+            normal: "float32x3",
+            plot_index: "float32",
+            material_seed: "float32",
+            surface_type: "float32",
           },
         },
       ],
@@ -362,11 +400,10 @@ async function createGeneration(
       label: "garden-ground",
     });
     const soil = draw(gpu, {
-      shader: gardenShader,
-      geometry: boxGeometry,
-      instances: 12,
-      cull: "back",
-      label: "garden-soil",
+      shader: soilShader,
+      geometry: soilGeometry,
+      cull: "none",
+      label: "garden-soil-high-density",
     });
     const path = draw(gpu, {
       shader: gardenShader,
@@ -402,10 +439,17 @@ async function createGeneration(
       wet2: emptyWet,
     };
     setWorldUniforms(ground, shared, snapshot, 0);
-    setWorldUniforms(soil, shared, snapshot, 1);
     setWorldUniforms(path, shared, snapshot, 2);
     setWorldUniforms(fence, shared, snapshot, 3);
     setWorldUniforms(vegetation, shared, snapshot, 4);
+    setSoilUniforms(soil, {
+      viewProjection: camera.viewProjection,
+      cameraPosition: [...camera.position, 1],
+      scene: [0, snapshot.weather.cloudiness, snapshot.weather.sunlight, snapshot.weather.rain],
+      wet0: emptyWet,
+      wet1: emptyWet,
+      wet2: emptyWet,
+    });
     sky.set({
       resolution: size,
       skyTop: [...snapshot.weather.skyTop, 1],
@@ -452,6 +496,7 @@ async function createGeneration(
       size,
       sceneTarget,
       boxGeometry,
+      soilGeometry,
       vegetationGeometry,
       ground,
       soil,
@@ -466,6 +511,7 @@ async function createGeneration(
     };
   } catch (error) {
     bestEffort(() => boxGeometry?.destroy());
+    bestEffort(() => soilGeometry?.destroy());
     bestEffort(() => vegetationGeometry?.destroy());
     bestEffort(() => destroyTarget(sceneTarget));
     throw error;
@@ -499,21 +545,37 @@ function setWorldUniforms(
   });
 }
 
-function cameraFor(snapshot: GardenSceneSnapshot, size: readonly [number, number]) {
+function setSoilUniforms(
+  drawable: Draw,
+  values: {
+    readonly viewProjection: ArrayLike<number>;
+    readonly cameraPosition: readonly number[];
+    readonly scene: readonly number[];
+    readonly wet0: readonly number[];
+    readonly wet1: readonly number[];
+    readonly wet2: readonly number[];
+  },
+): void {
+  drawable.set(values);
+}
+
+function cameraFor(snapshot: GardenSceneSnapshot, size: readonly [number, number]): CameraState {
   const orbit = snapshot.camera.angle + Math.PI * 0.25;
   const distance = 12.6 / snapshot.camera.zoom;
-  return perspectiveCamera({
+  const position = [
+    Math.sin(orbit) * distance,
+    7.6 / snapshot.camera.zoom,
+    Math.cos(orbit) * distance,
+  ] as const;
+  const camera = perspectiveCamera({
     fov: 42,
     aspect: size[0] / Math.max(1, size[1]),
     near: 0.1,
     far: 80,
-    position: [
-      Math.sin(orbit) * distance,
-      7.6 / snapshot.camera.zoom,
-      Math.cos(orbit) * distance,
-    ],
+    position,
     target: [0, -0.12, 0],
   });
+  return { viewProjection: camera.viewProjection, position };
 }
 
 function createCropMarkers(overlay: HTMLElement): CropMarker[] {
@@ -556,6 +618,7 @@ function value(matrix: ArrayLike<number>, index: number): number {
 
 function cleanupGeneration(generation: Generation): void {
   bestEffort(() => generation.boxGeometry.destroy());
+  bestEffort(() => generation.soilGeometry.destroy());
   bestEffort(() => generation.vegetationGeometry.destroy());
   bestEffort(() => destroyTarget(generation.sceneTarget));
 }

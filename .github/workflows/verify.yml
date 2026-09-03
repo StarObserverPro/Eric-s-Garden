@@ -26,6 +26,11 @@ jobs:
         run: npx vgpu doctor --pretty
       - name: Shader, model, mock, Node and production checks
         run: npm run check
+      - name: Capture deterministic soil evidence
+        run: |
+          mkdir -p browser-evidence
+          SOIL_EVIDENCE_PATH=browser-evidence/soil-node.ppm npx vitest run tests/soil-render-node.test.ts
+          test -s browser-evidence/soil-node.ppm
       - name: Capture the playable Canvas fallback
         run: |
           mkdir -p browser-evidence
