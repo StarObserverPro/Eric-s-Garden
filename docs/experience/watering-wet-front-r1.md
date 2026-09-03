@@ -24,6 +24,12 @@ Crystal Garden's `long-spout-can` was useful as a modeling reference: tapered gr
 
 Each bed's wet progress can continue independently after a click. The visible can follows the latest watering action, so rapid clicks do not stall earlier wet fronts or require a gameplay queue. If user testing shows that rapid watering makes the tool motion confusing, add a tiny renderer-only visual queue; do not serialize it or make growth depend on animation completion.
 
+## Pixel evidence should compare semantic states, not magic color counts
+
+Software-renderer readback is useful here, but the assertion has to follow the visual contract. A fixed number of changed pixels at an intermediate wetting time is brittle because projected bed area changes with camera and resolution. Use the fully wet version of the same bed as the local denominator: give the full state an absolute visibility floor, then require the partial state to occupy a non-zero but clearly smaller share of that exact target.
+
+The same rule applies to the pour. Do not infer water presence by requiring a fixed number of sufficiently blue pixels: garden lighting and fog legitimately change the rendered RGB ratio. Render the identical watering-can pose once without water-strand geometry and once with it, then compare the two frames. That isolates the actual pour contribution and can additionally require a vertical span, which is closer to the intended narrow-stream silhouette than a color classifier.
+
 ## Verification boundary
 
 The important direct evidence is deterministic timing tests, watering-can geometry checks, WGSL validation, vgpu mock compilation/draw, and a representative WebGPU browser path because this work touches the renderer integration file. Visual acceptance still requires looking at the actual wet-front shape and can proportions; a green build proves compatibility, not taste.
