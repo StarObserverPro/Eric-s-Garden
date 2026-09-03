@@ -20,11 +20,14 @@ It currently composes:
 
 The hosted `.github/workflows/verify.yml` additionally installs vgpu's portable CPU renderer, runs `vgpu doctor`, executes `npm run check`, starts the production preview, and captures a headless **Canvas fallback** screenshot/DOM packet.
 
+Renderer-architecture changes have a separate `.github/workflows/webgpu-architecture-verify.yml`. It is path-scoped to renderer/runtime ownership, vgpu lifecycle integration and related build wiring, and proves that the production build remains on `vgpu · WebGPU` in a WebGPU-enabled browser. It is deliberately **not** a generic visual/modeling gate: crop, soil, vegetation, hardscape or material modeling work should validate the changed model/material itself unless that work also changes renderer/resource architecture.
+
 That distinction matters:
 
 - the portable CPU renderer and Node tests prove bounded shader/render compatibility;
 - the hosted `--disable-gpu` screenshot proves the playable Canvas fallback and production wiring;
-- neither one proves that the browser WebGPU/vgpu path rendered correctly on a real WebGPU device;
+- the architecture-scoped browser job proves the WebGPU/vgpu startup/presentation seam when that seam changes;
+- model/material evidence does not become architecture evidence merely because it uses vgpu;
 - a screenshot existing does not prove aesthetic acceptance.
 
 ## 2. Evidence layers
@@ -32,13 +35,13 @@ That distinction matters:
 Use only the layers affected by the change.
 
 1. **Worklet evidence** — the smallest direct checks for the active packet's acceptance items.
-2. **Integration evidence** — `npm run check` and the hosted Verify result on the exact final PR head.
+2. **Integration evidence** — `npm run check` and the hosted Verify result on the exact final PR head when broad integration is part of the changed seam.
 3. **Browser evidence** — a representative production-build journey when browser/runtime behavior can fail independently of source tests.
 4. **Visual evidence** — exact-state screenshots or recordings for visible rendering/layout changes.
 5. **Performance evidence** — fixed conditions and identified hardware when the claim is about frame cost, GPU behavior, or resource pressure.
 6. **Production canary** — a separate, changed-journey check after an explicitly authorized deployment.
 
-Do not repeatedly run every layer after every edit. Run focused checks early; run the broad repository check when the worklet is coherent and again through final-head CI.
+Do not repeatedly run every layer after every edit. Run focused checks early; use broader integration or browser evidence only when the changed contract actually crosses those seams.
 
 ## 3. Minimum evidence by change
 
@@ -47,8 +50,8 @@ Do not repeatedly run every layer after every edit. Run focused checks early; ru
 | Documentation/repository notes | exact diff and link/path review | application build, browser smoke |
 | Game logic/save semantics | focused deterministic tests; round trip/reset when affected | renderer visual matrix |
 | UI/input | affected interaction at relevant desktop/touch size; focused tests if present | unrelated GPU tests |
-| WGSL/material/geometry | `npm run shader:check`; focused mock/Node test; representative visual capture | unrelated game-flow matrix |
-| Renderer/resource lifecycle | focused tests plus browser load/re-entry/disposal or forced failure when the seam changes | every level and every viewport |
+| WGSL/material/geometry/modeling | focused shader/model validation; representative mock/Node or visual evidence for the changed model as applicable | WebGPU architecture browser smoke unless renderer/resource ownership also changed |
+| Renderer/resource lifecycle | focused tests plus architecture-scoped WebGPU browser load/re-entry/disposal or forced failure when the seam changes | every level, every viewport, unrelated model acceptance |
 | Canvas fallback | forced unsupported/init/render/device-loss path as applicable; playable interaction | WebGPU performance claim |
 | WebGPU/vgpu browser behavior | production build on a browser/device with WebGPU active; confirm the active renderer and representative frame | treating Canvas CI as equivalent |
 | Performance/LOD/DPR | fixed seed/state, viewport, DPR, instance tier and identified hardware; record frame/draw/pass/resource metrics | software-renderer FPS claims |
@@ -82,6 +85,8 @@ Before calling a browser result “WebGPU evidence,” confirm both:
 
 A software/CPU backend can be excellent deterministic correctness evidence, but it is not target-GPU performance evidence. A fallback Canvas capture can prove resilience, but not WebGPU rendering.
 
+The architecture browser smoke is a regression check for the renderer lifecycle seam, not a standing requirement for every vgpu-authored model. A model-only change should not acquire architecture verification obligations unless it also changes initialization, Surface/frame usage, renderer ownership, resource lifecycle, fallback switching, build integration or another browser-only renderer contract.
+
 ## 5. Result language
 
 Keep claims bounded. Prefer statements such as:
@@ -90,6 +95,7 @@ Keep claims bounded. Prefer statements such as:
 - `game/save contract: pass`;
 - `production build: pass`;
 - `Canvas fallback browser smoke: pass`;
+- `WebGPU architecture browser smoke: pass`;
 - `WebGPU browser visual: not checked`;
 - `target-device performance: blocked — no representative GPU available`.
 
