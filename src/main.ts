@@ -1,0 +1,529 @@
+import "../styles.css";
+
+import {
+  CROPS,
+  LEVELS,
+  MAX_STAGE,
+  actOnPlot,
+  advanceLevel,
+  blankState,
+  currentLevel,
+  grow,
+  harvestedCount,
+  harvestedTotal,
+  livingPlots,
+  loadState,
+  plant,
+  resetState,
+  saveState,
+  setTool,
+  totalTarget,
+  type ActionResult,
+  type CropId,
+  type GameState,
+  type Question,
+  type Tool,
+} from "./game/model";
+import {
+  DEFAULT_RENDER_SETTINGS,
+  isDprTier,
+  isInstanceTier,
+  type RenderSettings,
+} from "./render/contract";
+import { RenderRuntime } from "./render/runtime";
+import {
+  syncSettingsControls,
+  updateDiagnostics,
+  type DiagnosticsElements,
+} from "./diagnostics/panel";
+import { createSceneSnapshot } from "./scene/snapshot";
+
+const RENDER_SETTINGS_KEY = "eric-secret-garden-render-r1";
+
+const element = {
+  stage: byId<HTMLElement>("gardenStage"),
+  canvas2d: byId<HTMLCanvasElement>("gardenCanvas2d"),
+  gpuCanvas: byId<HTMLCanvasElement>("gardenCanvasGpu"),
+  cropOverlay: byId<HTMLElement>("cropOverlay"),
+  target: byId<HTMLElement>("targetList"),
+  badge: byId<HTMLElement>("levelBadge"),
+  weather: byId<HTMLElement>("weatherBadge"),
+  progress: byId<HTMLElement>("levelProgress"),
+  progressFill: byId<HTMLElement>("progressFill"),
+  title: byId<HTMLElement>("missionTitle"),
+  hint: byId<HTMLElement>("missionHint"),
+  water: byId<HTMLElement>("waterStatus"),
+  spray: byId<HTMLElement>("sprayStatus"),
+  growth: byId<HTMLElement>("growthStatus"),
+  stars: byId<HTMLElement>("starCount"),
+  eventLog: byId<HTMLElement>("eventLog"),
+  unlockIcon: byId<HTMLElement>("unlockIcon"),
+  unlockTitle: byId<HTMLElement>("unlockTitle"),
+  unlockText: byId<HTMLElement>("unlockText"),
+  grow: byId<HTMLButtonElement>("growBtn"),
+  growIcon: byId<HTMLElement>("growIcon"),
+  growLabel: byId<HTMLElement>("growLabel"),
+  growSubLabel: byId<HTMLElement>("growSubLabel"),
+  toast: byId<HTMLElement>("toast"),
+  stats: byId<HTMLDialogElement>("statsDialog"),
+  statsBody: byId<HTMLElement>("statsBody"),
+  statsFoot: byId<HTMLElement>("statsFoot"),
+  statsSummary: byId<HTMLElement>("statsSummary"),
+  questionButton: byId<HTMLButtonElement>("questionBtn"),
+  questionBox: byId<HTMLElement>("questionBox"),
+  levelDialog: byId<HTMLDialogElement>("levelDialog"),
+  completeTitle: byId<HTMLElement>("completeTitle"),
+  completeText: byId<HTMLElement>("completeText"),
+  reward: byId<HTMLElement>("levelReward"),
+  levelQuestion: byId<HTMLElement>("levelQuestion"),
+  next: byId<HTMLButtonElement>("nextLevelBtn"),
+  statsButton: byId<HTMLButtonElement>("statsBtn"),
+  speakButton: byId<HTMLButtonElement>("speakBtn"),
+  resetButton: byId<HTMLButtonElement>("resetBtn"),
+  retryRenderer: byId<HTMLButtonElement>("retryRendererBtn"),
+};
+
+const diagnostics: DiagnosticsElements = {
+  rendererName: byId<HTMLElement>("rendererName"),
+  rendererMessage: byId<HTMLElement>("rendererMessage"),
+  fps: byId<HTMLElement>("diagFps"),
+  frame: byId<HTMLElement>("diagFrame"),
+  drawCalls: byId<HTMLElement>("diagDraws"),
+  instances: byId<HTMLElement>("diagInstances"),
+  passes: byId<HTMLElement>("diagPasses"),
+  resources: byId<HTMLElement>("diagResources"),
+  dpr: byId<HTMLElement>("diagDpr"),
+  indicator: byId<HTMLElement>("rendererIndicator"),
+  preference: byId<HTMLSelectElement>("rendererPreference"),
+  instanceTier: byId<HTMLSelectElement>("instanceTier"),
+  dprTier: byId<HTMLSelectElement>("dprTier"),
+};
+
+let state = loadState(localStorage);
+let renderSettings = loadRenderSettings();
+let toastTimer = 0;
+
+syncSettingsControls(diagnostics, renderSettings);
+const runtime = new RenderRuntime({
+  canvas2d: element.canvas2d,
+  gpuCanvas: element.gpuCanvas,
+  cropOverlay: element.cropOverlay,
+  settings: renderSettings,
+  snapshot: createSceneSnapshot(state),
+  onMetrics: (metrics) => updateDiagnostics(diagnostics, metrics),
+  onFallback: (message) => showToast(message, 2600),
+});
+
+function update(): void {
+  const level = currentLevel(state);
+  const harvested = harvestedTotal(state);
+  const target = totalTarget(state);
+  element.badge.textContent = `第 ${state.level + 1} 关`;
+  element.weather.textContent = level.weather;
+  element.progress.textContent = `${harvested} / ${target}`;
+  element.progressFill.style.width = `${Math.min(100, target > 0 ? harvested / target * 100 : 0)}%`;
+  element.title.textContent = level.title;
+  element.hint.textContent = level.hint;
+  element.stars.textContent = `⭐ ${state.stars}`;
+
+  element.target.replaceChildren(
+    ...Object.entries(level.targets).map(([crop, count]) => targetChip(crop as CropId, count ?? 0)),
+  );
+
+  const living = livingPlots(state);
+  const watered = living.filter((plot) => plot.watered).length;
+  const pests = state.plots.filter((plot) => plot.pest && !plot.harvested).length;
+  element.water.textContent = `💧 浇水 ${watered}/${living.length}`;
+  element.spray.textContent = `🛡️ 虫害 ${pests}`;
+  element.growth.textContent = `🌿 生长 ${state.round}/${MAX_STAGE}`;
+
+  if (!state.planted) {
+    element.growIcon.textContent = "🌱";
+    element.growLabel.textContent = "播种";
+    element.growSubLabel.textContent = "按一下开始今天的菜园";
+  } else if (state.round < MAX_STAGE) {
+    element.growIcon.textContent = "🌿";
+    element.growLabel.textContent = "长大一步";
+    element.growSubLabel.textContent = "先浇水，必要时赶走小虫";
+  } else {
+    element.growIcon.textContent = "🧺";
+    element.growLabel.textContent = "成熟啦";
+    element.growSubLabel.textContent = "换成收菜，点成熟蔬菜";
+  }
+
+  element.eventLog.replaceChildren(...state.log.map((entry) => logItem(entry.icon, entry.title, entry.text)));
+  if (state.level < 2) {
+    element.unlockIcon.textContent = "🔒";
+    element.unlockTitle.textContent = "菜地成长计划";
+    element.unlockText.textContent = `再过 ${2 - state.level} 关解锁生菜`;
+  } else if (state.level < 4) {
+    element.unlockIcon.textContent = "🥬";
+    element.unlockTitle.textContent = "生菜已经解锁";
+    element.unlockText.textContent = `再过 ${4 - state.level} 关会见到草莓`;
+  } else {
+    element.unlockIcon.textContent = "🍓";
+    element.unlockTitle.textContent = "草莓已经解锁";
+    element.unlockText.textContent = state.completed ? "秘密菜园 R2 已全部通关" : "最后一关，把它们照顾成熟吧";
+  }
+
+  document.querySelectorAll<HTMLButtonElement>(".tool-btn").forEach((button) => {
+    button.classList.toggle("active", button.dataset.tool === state.tool);
+  });
+  runtime.setSnapshot(createSceneSnapshot(state));
+}
+
+function commit(result: ActionResult, options: { showComplete?: boolean } = {}): void {
+  saveState(localStorage, state);
+  update();
+  if (result.toast) showToast(result.toast, result.toastMs);
+  if (result.finished || options.showComplete) showLevelComplete();
+}
+
+function showLevelComplete(): void {
+  const last = state.level === LEVELS.length - 1;
+  element.completeTitle.textContent = last ? "秘密菜园大丰收！" : "这一篮收好啦！";
+  element.completeText.textContent = last
+    ? "你把 R2 的五关都照顾完了。"
+    : `第 ${state.level + 1} 关完成，得到 3 颗星。`;
+  element.reward.replaceChildren(
+    rewardPill("⭐ +3"),
+    rewardPill(`🧺 ${harvestedTotal(state)} 棵`),
+  );
+  renderQuestion(element.levelQuestion, currentLevel(state).question);
+  element.next.textContent = last ? "看看我的菜园 →" : "下一关 →";
+  if (!element.levelDialog.open) element.levelDialog.showModal();
+}
+
+function showStats(): void {
+  const cropIds = (Object.keys(CROPS) as CropId[]).filter(
+    (crop) => currentLevel(state).targets[crop] || state.totalHarvest[crop],
+  );
+  let sum = 0;
+  let target = 0;
+  let left = 0;
+  element.statsBody.replaceChildren(
+    ...cropIds.map((crop) => {
+      const harvested = harvestedCount(state, crop);
+      const cropTarget = currentLevel(state).targets[crop] ?? 0;
+      const remaining = Math.max(0, cropTarget - harvested);
+      sum += harvested;
+      target += cropTarget;
+      left += remaining;
+      const row = document.createElement("tr");
+      row.append(
+        tableCell(`${CROPS[crop][1]} ${CROPS[crop][0]}`),
+        tableCell(String(harvested)),
+        tableCell(cropTarget ? String(cropTarget) : "—"),
+        tableCell(cropTarget ? String(remaining) : "—"),
+      );
+      return row;
+    }),
+  );
+  const totalRow = document.createElement("tr");
+  totalRow.append(
+    tableCell("合计"),
+    tableCell(String(sum)),
+    tableCell(String(target)),
+    tableCell(String(left)),
+  );
+  element.statsFoot.replaceChildren(totalRow);
+  const lifetime = Object.values(state.totalHarvest).reduce<number>((acc, count) => acc + (Number(count) || 0), 0);
+  element.statsSummary.replaceChildren(
+    summaryCell(sum, "本关已摘"),
+    summaryCell(lifetime, "总共摘过"),
+    summaryCell(state.stars, "星星"),
+  );
+  element.questionBox.hidden = true;
+  if (!element.stats.open) element.stats.showModal();
+}
+
+function renderQuestion(container: HTMLElement, question: Question): void {
+  container.replaceChildren();
+  const title = document.createElement("div");
+  title.className = "question-title";
+  title.textContent = `💡 ${question.text}`;
+  const answers = document.createElement("div");
+  answers.className = "answer-row";
+  const result = document.createElement("div");
+  result.className = "answer-result";
+  for (const choice of question.choices) {
+    const button = document.createElement("button");
+    button.className = "answer-btn";
+    button.type = "button";
+    button.dataset.answer = choice;
+    button.textContent = question.numeric
+      ? choice
+      : isCropId(choice)
+        ? `${CROPS[choice][1]} ${CROPS[choice][0]}`
+        : choice;
+    button.addEventListener("click", () => {
+      const correct = choice === question.answer;
+      button.classList.add(correct ? "correct" : "wrong");
+      result.textContent = correct ? "答对啦！🌟" : "再看看，试一次。";
+    });
+    answers.append(button);
+  }
+  container.append(title, answers, result);
+}
+
+function showToast(text: string, duration = 1700): void {
+  element.toast.textContent = text;
+  element.toast.classList.add("show");
+  window.clearTimeout(toastTimer);
+  toastTimer = window.setTimeout(() => element.toast.classList.remove("show"), duration);
+}
+
+function updateCameraOnly(): void {
+  saveState(localStorage, state);
+  runtime.setSnapshot(createSceneSnapshot(state));
+}
+
+function applyRenderSettings(next: RenderSettings): void {
+  renderSettings = next;
+  saveRenderSettings(next);
+  syncSettingsControls(diagnostics, next);
+  void runtime.applySettings(next);
+}
+
+document.querySelectorAll<HTMLButtonElement>(".tool-btn").forEach((button) => {
+  button.addEventListener("click", () => {
+    const tool = button.dataset.tool;
+    if (tool === "harvest" || tool === "water" || tool === "spray") commit(setTool(state, tool));
+  });
+});
+element.grow.addEventListener("click", () => commit(grow(state)));
+element.statsButton.addEventListener("click", showStats);
+element.speakButton.addEventListener("click", () => {
+  if (!("speechSynthesis" in window)) {
+    showToast("这个浏览器暂时不能朗读。");
+    return;
+  }
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(
+    `第${state.level + 1}关。${currentLevel(state).title}。${currentLevel(state).hint}`,
+  );
+  utterance.lang = "zh-CN";
+  utterance.rate = 0.88;
+  window.speechSynthesis.speak(utterance);
+});
+element.resetButton.addEventListener("click", () => {
+  if (window.confirm("要把 Eric 的秘密菜园重新从第 1 关开始吗？")) {
+    state = resetState(localStorage);
+    update();
+    showToast("已经重新开始。");
+  }
+});
+element.questionButton.addEventListener("click", () => {
+  element.questionBox.hidden = false;
+  renderQuestion(element.questionBox, currentLevel(state).question);
+});
+element.next.addEventListener("click", () => {
+  const result = advanceLevel(state);
+  saveState(localStorage, state);
+  element.levelDialog.close();
+  update();
+  if (result.toast) showToast(result.toast, result.toastMs);
+});
+
+diagnostics.preference.addEventListener("change", () => {
+  applyRenderSettings({
+    ...renderSettings,
+    preference: diagnostics.preference.value === "canvas" ? "canvas" : "auto",
+  });
+});
+diagnostics.instanceTier.addEventListener("change", () => {
+  const value = Number(diagnostics.instanceTier.value);
+  if (isInstanceTier(value)) applyRenderSettings({ ...renderSettings, instances: value });
+});
+diagnostics.dprTier.addEventListener("change", () => {
+  const value = Number(diagnostics.dprTier.value);
+  if (isDprTier(value)) applyRenderSettings({ ...renderSettings, maxDpr: value });
+});
+element.retryRenderer.addEventListener("click", () => void runtime.applySettings(renderSettings));
+
+interface DragState {
+  readonly originX: number;
+  readonly angle: number;
+  readonly started: number;
+  moved: boolean;
+}
+
+interface PinchState {
+  readonly distance: number;
+  readonly zoom: number;
+}
+
+const pointers = new Map<number, { x: number; y: number }>();
+let drag: DragState | undefined;
+let pinch: PinchState | undefined;
+
+element.stage.addEventListener("pointerdown", (event) => {
+  if ((event.target as Element).closest(".render-panel")) return;
+  element.stage.setPointerCapture(event.pointerId);
+  const point = stagePoint(event);
+  pointers.set(event.pointerId, point);
+  if (pointers.size === 1) {
+    drag = {
+      originX: point.x,
+      angle: state.camera.angle,
+      started: performance.now(),
+      moved: false,
+    };
+  } else if (pointers.size === 2) {
+    const values = [...pointers.values()];
+    pinch = {
+      distance: distance(values[0]!, values[1]!),
+      zoom: state.camera.zoom,
+    };
+    drag = undefined;
+  }
+});
+
+element.stage.addEventListener("pointermove", (event) => {
+  if (!pointers.has(event.pointerId)) return;
+  const point = stagePoint(event);
+  pointers.set(event.pointerId, point);
+  if (pointers.size === 2 && pinch) {
+    const values = [...pointers.values()];
+    const currentDistance = distance(values[0]!, values[1]!);
+    state.camera.zoom = clamp(pinch.zoom * currentDistance / Math.max(1, pinch.distance), 0.76, 1.35);
+    updateCameraOnly();
+  } else if (drag) {
+    const deltaX = point.x - drag.originX;
+    if (Math.abs(deltaX) > 7) drag.moved = true;
+    state.camera.angle = drag.angle + deltaX * 0.006;
+    updateCameraOnly();
+  }
+});
+
+const finishPointer = (event: PointerEvent): void => {
+  if (!pointers.has(event.pointerId)) return;
+  const point = stagePoint(event);
+  const click = pointers.size === 1 && drag && !drag.moved && performance.now() - drag.started < 550;
+  pointers.delete(event.pointerId);
+  if (click) {
+    const index = runtime.pickPlot(point.x, point.y);
+    if (index !== null) commit(actOnPlot(state, index));
+  }
+  if (pointers.size < 2) pinch = undefined;
+  if (!pointers.size) {
+    drag = undefined;
+    updateCameraOnly();
+  }
+};
+
+element.stage.addEventListener("pointerup", finishPointer);
+element.stage.addEventListener("pointercancel", finishPointer);
+element.stage.addEventListener("wheel", (event) => {
+  if ((event.target as Element).closest(".render-panel")) return;
+  event.preventDefault();
+  state.camera.zoom = clamp(state.camera.zoom * (event.deltaY > 0 ? 0.93 : 1.07), 0.76, 1.35);
+  updateCameraOnly();
+}, { passive: false });
+
+window.addEventListener("resize", () => runtime.resize());
+if ("ResizeObserver" in window) new ResizeObserver(() => runtime.resize()).observe(element.stage);
+window.addEventListener("beforeunload", () => runtime.dispose(), { once: true });
+
+update();
+runtime.start();
+
+function loadRenderSettings(): RenderSettings {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(RENDER_SETTINGS_KEY) ?? "{}") as Partial<RenderSettings>;
+    const instances = Number(parsed.instances);
+    const maxDpr = Number(parsed.maxDpr);
+    return {
+      preference: parsed.preference === "canvas" ? "canvas" : "auto",
+      instances: isInstanceTier(instances) ? instances : DEFAULT_RENDER_SETTINGS.instances,
+      maxDpr: isDprTier(maxDpr) ? maxDpr : DEFAULT_RENDER_SETTINGS.maxDpr,
+    };
+  } catch {
+    return { ...DEFAULT_RENDER_SETTINGS };
+  }
+}
+
+function saveRenderSettings(settings: RenderSettings): void {
+  try {
+    localStorage.setItem(RENDER_SETTINGS_KEY, JSON.stringify(settings));
+  } catch {
+    // Rendering preferences are optional; the game save remains independent.
+  }
+}
+
+function targetChip(crop: CropId, count: number): HTMLElement {
+  const chip = document.createElement("div");
+  chip.className = "target-chip";
+  const emoji = document.createElement("span");
+  emoji.className = "emoji";
+  emoji.textContent = CROPS[crop][1];
+  const name = document.createElement("b");
+  name.textContent = CROPS[crop][0];
+  const progress = document.createElement("small");
+  progress.textContent = `${harvestedCount(state, crop)} / ${count}`;
+  chip.append(emoji, name, progress);
+  return chip;
+}
+
+function logItem(iconText: string, titleText: string, bodyText: string): HTMLElement {
+  const item = document.createElement("div");
+  item.className = "log-item";
+  const icon = document.createElement("span");
+  icon.className = "log-icon";
+  icon.textContent = iconText;
+  const content = document.createElement("div");
+  const title = document.createElement("b");
+  title.textContent = titleText;
+  const body = document.createElement("p");
+  body.textContent = bodyText;
+  content.append(title, body);
+  item.append(icon, content);
+  return item;
+}
+
+function rewardPill(text: string): HTMLElement {
+  const pill = document.createElement("span");
+  pill.className = "reward-pill";
+  pill.textContent = text;
+  return pill;
+}
+
+function summaryCell(value: number, label: string): HTMLElement {
+  const cell = document.createElement("div");
+  cell.className = "summary-cell";
+  const amount = document.createElement("b");
+  amount.textContent = String(value);
+  const name = document.createElement("span");
+  name.textContent = label;
+  cell.append(amount, name);
+  return cell;
+}
+
+function tableCell(text: string): HTMLTableCellElement {
+  const cell = document.createElement("td");
+  cell.textContent = text;
+  return cell;
+}
+
+function stagePoint(event: PointerEvent | WheelEvent): { x: number; y: number } {
+  const rect = element.stage.getBoundingClientRect();
+  return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+}
+
+function distance(a: { x: number; y: number }, b: { x: number; y: number }): number {
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+function clamp(value: number, minimum: number, maximum: number): number {
+  return Math.max(minimum, Math.min(maximum, value));
+}
+
+function isCropId(value: string): value is CropId {
+  return value in CROPS;
+}
+
+function byId<T extends HTMLElement>(id: string): T {
+  const value = document.getElementById(id);
+  if (!value) throw new Error(`Missing required element #${id}`);
+  return value as T;
+}

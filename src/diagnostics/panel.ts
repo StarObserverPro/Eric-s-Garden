@@ -1,0 +1,36 @@
+import type { RenderSettings, RuntimeMetrics } from "../render/contract";
+
+export interface DiagnosticsElements {
+  readonly rendererName: HTMLElement;
+  readonly rendererMessage: HTMLElement;
+  readonly fps: HTMLElement;
+  readonly frame: HTMLElement;
+  readonly drawCalls: HTMLElement;
+  readonly instances: HTMLElement;
+  readonly passes: HTMLElement;
+  readonly resources: HTMLElement;
+  readonly dpr: HTMLElement;
+  readonly indicator: HTMLElement;
+  readonly preference: HTMLSelectElement;
+  readonly instanceTier: HTMLSelectElement;
+  readonly dprTier: HTMLSelectElement;
+}
+
+export function updateDiagnostics(elements: DiagnosticsElements, metrics: RuntimeMetrics): void {
+  elements.rendererName.textContent = metrics.kind === "vgpu" ? "vgpu · WebGPU" : "Canvas 2D";
+  elements.rendererMessage.textContent = metrics.message;
+  elements.fps.textContent = metrics.fps > 0 ? metrics.fps.toFixed(0) : "—";
+  elements.frame.textContent = metrics.frameMs > 0 ? `${metrics.frameMs.toFixed(1)} ms` : "—";
+  elements.drawCalls.textContent = String(metrics.drawCalls);
+  elements.instances.textContent = metrics.instances.toLocaleString("en-US");
+  elements.passes.textContent = String(metrics.passes);
+  elements.resources.textContent = String(metrics.resources);
+  elements.dpr.textContent = metrics.dpr.toFixed(1);
+  elements.indicator.dataset.status = metrics.status;
+}
+
+export function syncSettingsControls(elements: DiagnosticsElements, settings: RenderSettings): void {
+  elements.preference.value = settings.preference;
+  elements.instanceTier.value = String(settings.instances);
+  elements.dprTier.value = String(settings.maxDpr);
+}
