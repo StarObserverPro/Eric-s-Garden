@@ -1,44 +1,36 @@
-# Meadow visual recovery
+# Meadow grass variation + low-cost AA R1
 
-Status: implementation complete; awaiting real-WebGPU visual review
-Base main SHA: e8f1496d49acd55c6dd704c8ce957f5e703fcf67
-PR: #5
-Verified head: 2465fc99be1185907e2143f44e492660f25b9a31
+Status: executing
+Base main SHA: 1767b544bef4c105e866a68bb05faa84d84540b4
+Branch: `agent/meadow-grass-variation-aa-r1`
 
 ## Objective
-Recover the strongest sky light, grass motion/density, and atmospheric color ideas from the supplied wind-meadow source into Eric's Garden's existing vgpu Phase 2 scene without importing its Three.js/WebGL runtime.
+Tune the already-successful meadow grass after real visual review: add stronger natural variation, slightly more perceived density, and inexpensive edge smoothing without changing the renderer architecture or vegetation performance tiers.
 
 ## Acceptance
-- A1 — The vgpu vegetation edge reads as layered grass rather than sparse crossed cards, with deterministic variation, root occlusion, back-light response, and coherent gust/eddy motion.
-- A2 — The sky's sun/atmosphere is camera-consistent and the garden receives a matching warm/cool light and subtle distance fog rather than a disconnected screen-space sun.
-- A3 — Existing weather levels still drive sunlight/cloud/rain/wind; no new gameplay state, second frame loop, Three.js dependency, or second scene graph is introduced.
-- A4 — The changed WGSL/geometry/build contracts pass repository verification; missing real-WebGPU visual evidence is reported explicitly rather than inferred from fallback evidence.
+- A1 — Grass blades show clearly more deterministic dark/light and slight cool/warm variation while preserving existing weather, root occlusion and back-light behavior.
+- A2 — Height variation exists at both tuft and individual-leaf level, so neighboring blades do not read as uniform ranks.
+- A3 — The meadow reads slightly denser without changing the `500 / 1500 / 4000` instance-tier contract or runtime governor semantics.
+- A4 — The final scene blit applies one bounded low-cost edge-aware anti-aliasing filter; no MSAA target, extra render pass or renderer ownership change is introduced.
+- A5 — Vegetation geometry tests, WGSL validation and the bounded meadow render evidence remain healthy. Final aesthetic acceptance still comes from representative WebGPU review.
 
 ## Non-goals
-- Do not add the demo's season/time-of-day controls or autumn gameplay state.
-- Do not import its Next.js/Sites shell, Three.js renderer, camera controls, or standalone terrain world.
-- Do not change Canvas fallback gameplay semantics, crop logic, saves, or soil wetting behavior.
+- No redesign of the existing wind field, flowers, sky, weather or garden layout.
+- No instance-tier increase, vgpu upgrade, new compute path or new renderer pass.
+- No Canvas gameplay, crop, soil, hardscape, save or UI change.
 
 ## Scene carrier and affected owners
-- Carrier: vegetation edge + sky/weather; dependent material owners: ground/soil lighting.
-- Paths: `src/scene/snapshot.ts`, `src/render/vgpu/geometry.ts`, `src/render/vgpu/vgpu-renderer.ts`, `src/render/vgpu/shaders/*.wgsl`, focused tests, `package.json` shader validation list.
-- Architecture boundary touched: no — one existing vgpu renderer, frame owner, scene snapshot and WebGPU context remain authoritative.
+- Carrier: existing vegetation edge; dependent presentation owner: final scene blit.
+- Paths: `src/render/vgpu/geometry.ts`, `src/render/vgpu/shaders/vegetation.wgsl`, `src/render/vgpu/shaders/blit.wgsl`, `tests/vegetation-geometry.test.ts`.
+- Architecture boundary touched: no — one vgpu renderer, one frame owner, one active renderer and the existing three-pass frame remain unchanged.
 
-## Result
-- Grass: segmented four-leaf tufts, canopy/understory variation, sparse flowers, coherent gust bands, eddies, cantilever-style bend profile, flutter, root occlusion and back-light response.
-- Sky/light: camera-orbit-consistent sun ray, horizon/twilight glow, lightweight Rayleigh/Mie-style terms, cloud field, warm direct light + cool ambient light, shared cloud shadow and exponential fog.
-- Ground: richer turf mottling/thatch; existing procedural soil now receives the same sky light while retaining wetness/material behavior.
-- Tone: restrained weather-aware exposure/saturation/contrast/vignette shaping rather than a separate demo filter stack.
-- Deliberately omitted: foreign Three.js/WebGL runtime, second scene graph/frame loop, season/time UI/state and standalone terrain world.
+## Current state
+- Completed: implementation prepared on the bounded branch.
+- Current step: run exact-head repository verification and inspect meadow evidence.
+- Next action: repair only failures attributable to this visual worklet, then leave the PR ready for real WebGPU aesthetic review.
+- Blocker: none.
 
-## Verification
-- Hosted `Verify` run #20 on head `2465fc99be1185907e2143f44e492660f25b9a31`: success.
-- Pinned portable CPU renderer health check: success.
-- All WGSL validation including the new vegetation shader: success.
-- Model/mock/Node tests and production TypeScript/Vite build: success.
-- Deterministic soil render evidence: success.
-- Playable Canvas fallback capture: success.
-- One native WGSL issue was found and repaired during verification: Naga correctly rejected compound assignment to an `xz` swizzle; the shader now accumulates horizontal displacement through whole `vec3` values.
-
-## Remaining visual claim
-No representative real-browser WebGPU capture is available through the current connected verification path. Therefore the integration is complete and verified, but final aesthetic claims about grass density, sun placement and color balance remain pending a real-WebGPU visual review. Do not infer those claims from the Canvas fallback or CPU/mock evidence.
+## Evidence target
+- Geometry: five grass blades per tuft, with the fifth using only three segments to increase blade geometry by about 14% rather than increasing instance count.
+- Color/height: independent deterministic seeds for tuft height, per-leaf height, brightness and hue.
+- Anti-aliasing: five scene samples in the existing final blit, blended only across detected high-contrast edges.
