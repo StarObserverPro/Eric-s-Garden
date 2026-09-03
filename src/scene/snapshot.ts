@@ -1,4 +1,5 @@
 import type { CropId, GameState } from "../game/model";
+import { CAMERA_DEFAULT_ELEVATION, type CameraViewState } from "./camera-controls";
 
 export type Vec3 = readonly [number, number, number];
 
@@ -34,6 +35,7 @@ export interface GardenSceneSnapshot {
   readonly camera: {
     readonly angle: number;
     readonly zoom: number;
+    readonly elevation: number;
   };
   readonly level: number;
   readonly weather: WeatherProfile;
@@ -135,7 +137,13 @@ export const PLOT_POSITIONS: readonly Vec3[] = Array.from({ length: 12 }, (_, in
   (Math.floor(index / 4) - 1) * 1.75,
 ] as const);
 
-export function createSceneSnapshot(state: GameState): GardenSceneSnapshot {
+export function createSceneSnapshot(
+  state: GameState,
+  cameraView: CameraViewState = {
+    zoom: state.camera.zoom,
+    elevation: CAMERA_DEFAULT_ELEVATION,
+  },
+): GardenSceneSnapshot {
   const emptyPlots = Array.from({ length: 12 }, (_, index) => ({
     index,
     crop: null,
@@ -148,7 +156,8 @@ export function createSceneSnapshot(state: GameState): GardenSceneSnapshot {
   return {
     camera: {
       angle: state.camera.angle,
-      zoom: state.camera.zoom,
+      zoom: cameraView.zoom,
+      elevation: cameraView.elevation,
     },
     level: state.level,
     weather: WEATHER[state.level] ?? WEATHER[0]!,
