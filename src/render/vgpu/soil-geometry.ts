@@ -1,11 +1,11 @@
 import { PLOT_POSITIONS } from "../../scene/snapshot";
+import { terrainHeightAt } from "./terrain-surface";
 
 export const SOIL_GRID_RESOLUTION = 72;
 export const SOIL_CLODS_PER_PLOT = 40;
 export const SOIL_VERTEX_STRIDE_FLOATS = 9;
 
-const SOIL_HALF_EXTENT = 0.67;
-const SOIL_BOTTOM = -0.235;
+const SOIL_HALF_EXTENT = 0.69;
 const CLODS_SEGMENTS = 8;
 
 type Vec3 = readonly [number, number, number];
@@ -121,8 +121,16 @@ function appendSkirt(output: number[], surface: SurfaceVertex[][], plotIndex: nu
   ];
 
   for (const [a, b] of edges) {
-    const bottomA: Vec3 = [a.position[0], SOIL_BOTTOM, a.position[2]];
-    const bottomB: Vec3 = [b.position[0], SOIL_BOTTOM, b.position[2]];
+    const bottomA: Vec3 = [
+      a.position[0],
+      terrainHeightAt(a.position[0], a.position[2]) - 0.008,
+      a.position[2],
+    ];
+    const bottomB: Vec3 = [
+      b.position[0],
+      terrainHeightAt(b.position[0], b.position[2]) - 0.008,
+      b.position[2],
+    ];
     const normal = normalize(cross(subtract(b.position, a.position), subtract(bottomA, a.position)));
     pushFlatTriangle(output, a.position, b.position, bottomB, normal, plotIndex, seed, 1);
     pushFlatTriangle(output, a.position, bottomB, bottomA, normal, plotIndex, seed, 1);
@@ -271,33 +279,32 @@ function soilWorldPoint(plotIndex: number, u: number, v: number, seed: number): 
   const superEdge = Math.pow(Math.pow(Math.abs(u), 4) + Math.pow(Math.abs(v), 4), 0.25);
   const edgeInfluence = smoothstep(0.56, 1, squareEdge);
   const cornerInset = smoothstep(0.98, 1.19, superEdge) * 0.075;
-  const warpX = (valueNoise(u * 2.3 + 3.7, v * 2.1 - 5.1, seed + 101) - 0.5) * 0.16 * edgeInfluence;
-  const warpZ = (valueNoise(u * 2.0 - 6.2, v * 2.5 + 1.9, seed + 211) - 0.5) * 0.16 * edgeInfluence;
-  return [
-    center[0] + u * SOIL_HALF_EXTENT * (1 - cornerInset) * (1 + warpX),
-    soilHeight(u, v, seed),
-    center[2] + v * SOIL_HALF_EXTENT * (1 - cornerInset) * (1 + warpZ),
-  ];
+  const warpX = (valueNoise(u * 2.3 + 3.7, v * 2.1 - 5.1, seed + 101) - 0.5) * 0.14 * edgeInfluence;
+  const warpZ = (valueNoise(u * 2.0 - 6.2, v * 2.5 + 1.9, seed + 211) - 0.5) * 0.14 * edgeInfluence;
+  const x = center[0] + u * SOIL_HALF_EXTENT * (1 - cornerInset) * (1 + warpX);
+  const z = center[2] + v * SOIL_HALF_EXTENT * (1 - cornerInset) * (1 + warpZ);
+  return [x, soilHeight(u, v, x, z, seed), z];
 }
 
-function soilHeight(u: number, v: number, seed: number): number {
+function soilHeight(u: number, v: number, worldX: number, worldZ: number, seed: number): number {
   const squareEdge = Math.max(Math.abs(u), Math.abs(v));
-  const superEdge = Math.pow(Math.pow(Math.abs(u), 4) + Math.pow(Math.abs(v), 4), 0.25);
   const edgeDistance = Math.max(0, 1 - squareEdge);
-  const interior = smoothstep(0.10, 0.36, edgeDistance);
-  const shoulder = smoothstep(0.68, 1.0, Math.min(1, superEdge));
-  const mound = 0.19 * (1 - smoothstep(0.08, 0.94, squareEdge));
+  const detailMask = 1 - smoothstep(0.68, 0.98, squareEdge);
+  const interior = smoothstep(0.10, 0.36, edgeDistance) * detailMask;
+  const mound = 0.175 * (1 - smoothstep(0.08, 0.94, squareEdge));
   const coarse = (fbm(u * 1.18 + 7.1, v * 1.18 - 2.7, seed + 17) - 0.5) * 0.046;
   const medium = (fbm(u * 3.65 - 4.4, v * 3.65 + 8.6, seed + 53) - 0.5) * 0.024;
   const rakeNoise = valueNoise(u * 2.15 + 9.2, v * 2.15 - 3.4, seed + 89) - 0.5;
   const rake = Math.sin((v * 5.2 + rakeNoise * 0.18) * Math.PI + seed * 0.00013) * 0.009;
   const shallowPits = (valueNoise(u * 5.8 - 1.7, v * 5.8 + 2.9, seed + 131) - 0.5) * 0.011;
-  const brokenShoulder = (valueNoise(u * 7.4 + 2.3, v * 7.4 - 6.1, seed + 173) - 0.5) * 0.014 * shoulder;
-  return -0.205
+  const edgeRuffle = (valueNoise(u * 7.4 + 2.3, v * 7.4 - 6.1, seed + 173) - 0.5)
+    * 0.010
+    * (1 - smoothstep(0.88, 1.0, squareEdge));
+  return terrainHeightAt(worldX, worldZ)
+    + 0.004
     + mound
     + interior * (coarse + medium + rake + shallowPits)
-    - 0.010 * Math.pow(shoulder, 1.25)
-    + brokenShoulder;
+    + edgeRuffle;
 }
 
 function fbm(x: number, z: number, seed: number): number {
