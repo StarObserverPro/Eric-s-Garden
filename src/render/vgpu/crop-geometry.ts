@@ -590,9 +590,11 @@ function appendEllipsoid(
   anchor: Vec3,
   lobeAmount = 0,
 ): number {
+  // Keep one real pole vertex at each end instead of repeating an identical pole per segment.
+  // This removes degenerate cap triangles and the visible star/pinch they caused on fruit.
   const rows: Vec3[][] = [];
   const rowNormals: Vec3[][] = [];
-  for (let ring = 0; ring <= rings; ring += 1) {
+  for (let ring = 1; ring < rings; ring += 1) {
     const v = ring / rings;
     const phi = -Math.PI * 0.5 + v * Math.PI;
     const y = Math.sin(phi);
@@ -611,8 +613,22 @@ function appendEllipsoid(
     rows.push(row);
     rowNormals.push(normals);
   }
+
+  const bottom: Vec3 = [center[0], center[1] - radii[1], center[2]];
+  const top: Vec3 = [center[0], center[1] + radii[1], center[2]];
+  const bottomNormal: Vec3 = [0, -1, 0];
+  const topNormal: Vec3 = [0, 1, 0];
   let triangles = 0;
-  for (let ring = 0; ring < rings; ring += 1) {
+
+  const firstRow = rows[0]!;
+  const firstNormals = rowNormals[0]!;
+  for (let segment = 0; segment < segments; segment += 1) {
+    const next = (segment + 1) % segments;
+    pushTriangle(output, bottom, firstRow[next]!, firstRow[segment]!, bottomNormal, firstNormals[next]!, firstNormals[segment]!, anchor, cropKind, materialKind, birth, flex);
+    triangles += 1;
+  }
+
+  for (let ring = 0; ring < rows.length - 1; ring += 1) {
     for (let segment = 0; segment < segments; segment += 1) {
       const next = (segment + 1) % segments;
       const a = rows[ring]![segment]!;
@@ -627,6 +643,14 @@ function appendEllipsoid(
       pushTriangle(output, a, c, d, na, nc, nd, anchor, cropKind, materialKind, birth, flex);
       triangles += 2;
     }
+  }
+
+  const lastRow = rows[rows.length - 1]!;
+  const lastNormals = rowNormals[rowNormals.length - 1]!;
+  for (let segment = 0; segment < segments; segment += 1) {
+    const next = (segment + 1) % segments;
+    pushTriangle(output, lastRow[segment]!, lastRow[next]!, top, lastNormals[segment]!, lastNormals[next]!, topNormal, anchor, cropKind, materialKind, birth, flex);
+    triangles += 1;
   }
   return triangles;
 }
