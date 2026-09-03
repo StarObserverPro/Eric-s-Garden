@@ -165,7 +165,9 @@ fn vs_main(input: VertexIn) -> VertexOut {
     let berry_anchor = input.anchor.xz * whole_scale;
     let drop = clamp((input.anchor.y * whole_scale - local.y) / max(0.12 * whole_scale, 0.001), 0.0, 1.0);
     let radial = local.xz - berry_anchor;
-    local.xz = berry_anchor + radial * mix(1.02, 0.48, pow(drop, 1.35));
+    let tapered_xz = berry_anchor + radial * mix(1.02, 0.48, pow(drop, 1.35));
+    local.x = tapered_xz.x;
+    local.z = tapered_xz.y;
   }
 
   // Inner lettuce leaves turn upward and inward instead of reading as a flat lotus ring.
@@ -174,7 +176,9 @@ fn vs_main(input: VertexIn) -> VertexOut {
     let inner_leaf = 1.0 - smoothstep(0.040, 0.066, base_radius);
     let radial_distance = length(local.xz);
     let body = smoothstep(0.07 * whole_scale, 0.22 * whole_scale, radial_distance);
-    local.xz *= 1.0 - inner_leaf * body * 0.24;
+    let curled_xz = local.xz * (1.0 - inner_leaf * body * 0.24);
+    local.x = curled_xz.x;
+    local.z = curled_xz.y;
     local.y += inner_leaf * body * 0.055 * whole_scale;
   }
 
@@ -182,7 +186,9 @@ fn vs_main(input: VertexIn) -> VertexOut {
   if ((crop_kind > 1.5) && (crop_kind < 2.5) && is_foliage) {
     let upper_leaf = smoothstep(1.05, 1.48, input.anchor.y);
     let scaled_anchor = input.anchor.xz * whole_scale;
-    local.xz = scaled_anchor + (local.xz - scaled_anchor) * (1.0 - upper_leaf * 0.24);
+    let shortened_xz = scaled_anchor + (local.xz - scaled_anchor) * (1.0 - upper_leaf * 0.24);
+    local.x = shortened_xz.x;
+    local.z = shortened_xz.y;
   }
 
   let material_local = local;
@@ -194,7 +200,7 @@ fn vs_main(input: VertexIn) -> VertexOut {
 
   let wind_phase = uniforms.scene.x * (1.15 + uniforms.scene.y * 0.22) + root.x * 1.37 - root.z * 0.91;
   let height_load = smoothstep(0.04, 1.20, max(local.y, 0.0));
-  let gust = sin)Ý_phase) * 0.68 + sin(wind_phase * 0.47 + 1.8) * 0.32;
+  let gust = sin(wind_phase) * 0.68 + sin(wind_phase * 0.47 + 1.8) * 0.32;
   let wind_amount = gust * uniforms.scene.y * input.flex * height_load * 0.048;
   local.x += wind_amount * -0.84;
   local.z += wind_amount * 0.54;
