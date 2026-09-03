@@ -12,6 +12,8 @@ export interface WeatherProfile {
   readonly rain: number;
   readonly sunElevation: number;
   readonly sunColor: Vec3;
+  /** Diffuse environment radiance. It includes a restrained neutral fill so
+   * shadow-facing surfaces stay readable without inventing a second sun. */
   readonly ambientColor: Vec3;
   readonly fogColor: Vec3;
   readonly fogDensity: number;
@@ -38,6 +40,17 @@ export interface GardenSceneSnapshot {
   readonly plots: readonly ScenePlot[];
 }
 
+const NEUTRAL_FILL: Vec3 = [0.12, 0.12, 0.12];
+const WEATHER_AMBIENT_WEIGHT = 0.86;
+
+export function withNeutralDiffuseFill(weatherAmbient: Vec3): Vec3 {
+  return [
+    Math.min(1, weatherAmbient[0] * WEATHER_AMBIENT_WEIGHT + NEUTRAL_FILL[0]),
+    Math.min(1, weatherAmbient[1] * WEATHER_AMBIENT_WEIGHT + NEUTRAL_FILL[1]),
+    Math.min(1, weatherAmbient[2] * WEATHER_AMBIENT_WEIGHT + NEUTRAL_FILL[2]),
+  ];
+}
+
 const WEATHER: readonly WeatherProfile[] = [
   {
     id: "sunny",
@@ -49,7 +62,7 @@ const WEATHER: readonly WeatherProfile[] = [
     rain: 0,
     sunElevation: 0.28,
     sunColor: [1, 0.76, 0.42],
-    ambientColor: [0.46, 0.58, 0.63],
+    ambientColor: withNeutralDiffuseFill([0.46, 0.58, 0.63]),
     fogColor: [0.74, 0.77, 0.70],
     fogDensity: 0.022,
     exposure: 1.05,
@@ -64,7 +77,7 @@ const WEATHER: readonly WeatherProfile[] = [
     rain: 0,
     sunElevation: 0.35,
     sunColor: [1, 0.82, 0.56],
-    ambientColor: [0.48, 0.58, 0.62],
+    ambientColor: withNeutralDiffuseFill([0.48, 0.58, 0.62]),
     fogColor: [0.73, 0.74, 0.68],
     fogDensity: 0.024,
     exposure: 1.02,
@@ -79,7 +92,7 @@ const WEATHER: readonly WeatherProfile[] = [
     rain: 0,
     sunElevation: 0.48,
     sunColor: [0.91, 0.91, 0.82],
-    ambientColor: [0.43, 0.51, 0.57],
+    ambientColor: withNeutralDiffuseFill([0.43, 0.51, 0.57]),
     fogColor: [0.61, 0.66, 0.66],
     fogDensity: 0.03,
     exposure: 1,
@@ -94,7 +107,7 @@ const WEATHER: readonly WeatherProfile[] = [
     rain: 0,
     sunElevation: 0.17,
     sunColor: [1, 0.70, 0.36],
-    ambientColor: [0.43, 0.52, 0.60],
+    ambientColor: withNeutralDiffuseFill([0.43, 0.52, 0.60]),
     fogColor: [0.77, 0.65, 0.52],
     fogDensity: 0.025,
     exposure: 1.06,
@@ -109,7 +122,7 @@ const WEATHER: readonly WeatherProfile[] = [
     rain: 0.58,
     sunElevation: 0.12,
     sunColor: [1, 0.72, 0.41],
-    ambientColor: [0.42, 0.53, 0.59],
+    ambientColor: withNeutralDiffuseFill([0.42, 0.53, 0.59]),
     fogColor: [0.68, 0.67, 0.59],
     fogDensity: 0.033,
     exposure: 1.03,
