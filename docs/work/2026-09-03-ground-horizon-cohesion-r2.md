@@ -1,6 +1,6 @@
 # Ground and horizon cohesion R2
 
-Status: executing
+Status: review
 Base main SHA: `1a1d56e39ac9b9cba3841d2c9c7bfdb8d7c09f8a`
 
 ## Objective
@@ -22,15 +22,19 @@ Make the garden read as one continuous low-poly landscape rather than a bed plat
 
 ## Scene carrier and affected owners
 - Carrier: central beds + whole garden ground + fence/path + sky/weather + vegetation edge.
-- Paths: `src/render/vgpu/terrain-surface.ts`, `hardscape-geometry.ts`, `soil-geometry.ts`, `shaders/hardscape.wgsl`, `shaders/sky.wgsl`, `shaders/vegetation.wgsl`, `vgpu-renderer.ts`, focused tests.
+- Paths: `src/render/vgpu/terrain-surface.ts`, `src/render/vgpu/hardscape-geometry.ts`, `src/render/vgpu/soil-geometry.ts`, `src/render/vgpu/shaders/hardscape.wgsl`, `src/render/vgpu/shaders/sky.wgsl`, `src/render/vgpu/shaders/vegetation.wgsl`, `src/scene/snapshot.ts`, focused tests.
 - Architecture boundary touched: no.
 
 ## Current state
-- Completed: none.
-- Current step: extract the shared terrain height/normal owner and remove grid/material seams.
-- Next action: implement terrain/soil conformity, then horizon/fill and perimeter randomization.
-- Blocker: none; PR #14 overlaps only crop shader/evidence and is intentionally excluded.
+- Completed: A1-A6 source implementation and focused numeric gates; A7 repository execution evidence.
+- Current step: user / representative real-WebGPU visual review of the combined game camera.
+- Next action: repair only visual issues that remain in the representative frame; otherwise merge is a separate explicit decision.
+- Blocker: CI renders soil, meadow/sky/grass and hardscape as separate deterministic carriers; it does not prove the final combined WebGPU frame.
 
 ## Evidence
 - User screenshot in current conversation is the visual baseline.
 - Crystal Garden references: `scene/terrain/mesh.ts`, `scene/terrain/appearance.ts`, `scene/props/horizon-fill.ts`, `scene/create-scene.ts` hemisphere/fill pattern.
+- Source/evidence head `a906236683f80c39d30aa9cce3ad1c3bec252495`.
+- Verify run `33793901908` (#64) — success: shader/model/mock/Node/build, deterministic soil, meadow/sky/grass, hardscape and Canvas fallback evidence all passed; renderer-architecture browser probe was correctly skipped because this worklet does not change renderer architecture.
+- Human review of the generated Node frames: terrain/stone square tiling is materially reduced, terrain palette is continuous, stone rows are no longer mirrored, fence silhouette is stable, grass perimeter is irregularized, and a low-contrast distant horizon is present.
+- Combined real-WebGPU garden frame: `not_checked` — requires representative runtime visual review.
