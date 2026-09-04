@@ -35,6 +35,7 @@ jobs:
 
           if [[ -z "$BASE_SHA" || "$BASE_SHA" =~ ^0+$ ]]; then
             echo "required=true" >> "$GITHUB_OUTPUT"
+            echo "desktop_hud_required=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -43,6 +44,12 @@ jobs:
             echo "required=true" >> "$GITHUB_OUTPUT"
           else
             echo "required=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          if grep -Eq '^(index\.html|styles\.css|src/ui/desktop-hud\.(ts|css)|src/ui/portrait-mobile\.ts|tests/desktop-hud-browser-evidence\.js|\.github/workflows/verify\.yml)$' /tmp/changed-files.txt; then
+            echo "desktop_hud_required=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "desktop_hud_required=false" >> "$GITHUB_OUTPUT"
           fi
       - name: Install pinned dependencies
         run: npm ci --no-audit --no-fund
@@ -101,12 +108,12 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p browser-evidence
-          npx vite preview --host 127.0.0.1 --port 4173 >browser-evidence/vite-webgpu.log 2>&1 &
+          setsid npx vite preview --host 127.0.0.1 --port 4173 --strictPort >browser-evidence/vite-webgpu.log 2>&1 &
           SERVER_PID=$!
           SESSION="eric-webgpu-${GITHUB_RUN_ID}"
           cleanup() {
             agent-browser --session "$SESSION" close >/dev/null 2>&1 || true
-            kill "$SERVER_PID" 2>/dev/null || true
+            kill -- -"$SERVER_PID" 2>/dev/null || true
           }
           trap cleanup EXIT
 
@@ -142,33 +149,109 @@ jobs:
           agent-browser --session "$SESSION" --webgpu --headed screenshot browser-evidence/garden-webgpu.png
           test -s browser-evidence/garden-webgpu.png
       - name: Capture the playable Canvas fallback
+        env:
+          DESKTOP_HUD_EVIDENCE_REQUIRED: ${{ steps.webgpu_scope.outputs.desktop_hud_required }}
         run: |
+          set -euo pipefail
           mkdir -p browser-evidence
-          npx vite preview --host 127.0.0.1 --port 4173 >browser-evidence/vite.log 2>&1 &
+          setsid npx vite preview --host 127.0.0.1 --port 4174 --strictPort >browser-evidence/vite.log 2>&1 &
           SERVER_PID=$!
-          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          trap 'kill -- -"$SERVER_PID" 2>/dev/null || true' EXIT
           for attempt in {1..40}; do
-            if curl -fsS http://127.0.0.1:4173/ >/dev/null; then
+            if curl -fsS http://127.0.0.1:4174/ >/dev/null; then
               break
             fi
             sleep 0.25
           done
-          curl -fsS http://127.0.0.1:4173/ >/dev/null
-          BROWSER="$(command -v google-chrome || command -v chromium || command -v chromium-browser)"
-          test -n "$BROWSER"
-          "$BROWSER" \
-            --headless=new \
-            --no-sandbox \
-            --disable-gpu \
-            --hide-scrollbars \
-            --window-size=1440,1100 \
-            --virtual-time-budget=5000 \
-            --screenshot=browser-evidence/garden-fallback.png \
-            --dump-dom \
-            http://127.0.0.1:4173/ >browser-evidence/garden-dom.html
-          test -s browser-evidence/garden-fallback.png
-          grep -q "Eric 的秘密菜园" browser-evidence/garden-dom.html
-          grep -q "本轮只升级土壤、边缘和天气" browser-evidence/garden-dom.html
+          curl -fsS http://127.0.0.1:4174/ >/dev/null
+
+          if [[ "$DESKTOP_HUD_EVIDENCE_REQUIRED" == "true" ]]; then
+            node --check tests/desktop-hud-browser-evidence.js
+            if ! command -v agent-browser >/dev/null 2>&1; then
+              npm install --global agent-browser@0.33.0
+            fi
+            cp dist/index.html dist/desktop-hud-evidence.html
+            cp tests/desktop-hud-browser-evidence.js dist/desktop-hud-browser-evidence.js
+            python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("dist/desktop-hud-evidence.html")
+          html = path.read_text(encoding="utf-8")
+          marker = "</body>"
+          injected = '<script src="/desktop-hud-browser-evidence.js"></script>\n</body>'
+          if marker not in html:
+              raise SystemExit("desktop HUD evidence page is missing </body>")
+          path.write_text(html.replace(marker, injected, 1), encoding="utf-8")
+          PY
+
+            for VIEWPORT in 1906x937 1440x900 1280x800; do
+              WIDTH="${VIEWPORT%x*}"
+              HEIGHT="${VIEWPORT#*x}"
+              SCREENSHOT="browser-evidence/garden-fallback-${VIEWPORT}.png"
+              STATUS_FILE="browser-evidence/garden-hud-status-${VIEWPORT}.txt"
+              REPORT_FILE="browser-evidence/garden-hud-report-${VIEWPORT}.json"
+              SESSION="eric-canvas-${GITHUB_RUN_ID}-${WIDTH}-${HEIGHT}"
+
+              agent-browser --session "$SESSION" set viewport "$WIDTH" "$HEIGHT" 1
+              agent-browser --session "$SESSION" open \
+                "http://127.0.0.1:4174/desktop-hud-evidence.html?width=${WIDTH}&height=${HEIGHT}"
+
+              HUD_STATUS=""
+              for attempt in {1..20}; do
+                HUD_STATUS="$(agent-browser --session "$SESSION" eval 'document.documentElement.dataset.hudEvidence ?? ""')"
+                if grep -Eq 'pass|fail' <<<"$HUD_STATUS"; then
+                  break
+                fi
+                agent-browser --session "$SESSION" wait 250
+              done
+              printf '%s\n' "$HUD_STATUS" | tee "$STATUS_FILE"
+              agent-browser --session "$SESSION" eval \
+                'decodeURIComponent(document.documentElement.dataset.hudEvidenceReport ?? "")' >"$REPORT_FILE" || true
+
+              if ! grep -q 'pass' "$STATUS_FILE"; then
+                echo "Desktop HUD geometry failed at ${VIEWPORT}"
+                cat "$REPORT_FILE" || true
+                agent-browser --session "$SESSION" close >/dev/null 2>&1 || true
+                exit 1
+              fi
+
+              agent-browser --session "$SESSION" screenshot "$SCREENSHOT"
+              agent-browser --session "$SESSION" close >/dev/null 2>&1 || true
+              test -s "$SCREENSHOT"
+
+              python3 - "$SCREENSHOT" "$WIDTH" "$HEIGHT" <<'PY'
+          import struct
+          import sys
+
+          path, expected_width, expected_height = sys.argv[1], int(sys.argv[2]), int(sys.argv[3])
+          with open(path, "rb") as stream:
+              header = stream.read(24)
+          if header[:8] != b"\x89PNG\r\n\x1a\n":
+              raise SystemExit(f"{path} is not a PNG")
+          width, height = struct.unpack(">II", header[16:24])
+          if (width, height) != (expected_width, expected_height):
+              raise SystemExit(f"{path} is {width}x{height}, expected {expected_width}x{expected_height}")
+          PY
+            done
+
+            cp browser-evidence/garden-fallback-1440x900.png browser-evidence/garden-fallback.png
+          else
+            BROWSER="$(command -v google-chrome || command -v chromium || command -v chromium-browser)"
+            test -n "$BROWSER"
+            "$BROWSER" \
+              --headless=new \
+              --no-sandbox \
+              --disable-gpu \
+              --hide-scrollbars \
+              --window-size=1440,1100 \
+              --virtual-time-budget=5000 \
+              --screenshot=browser-evidence/garden-fallback.png \
+              --dump-dom \
+              http://127.0.0.1:4174/ >browser-evidence/garden-dom.html
+            test -s browser-evidence/garden-fallback.png
+            grep -q "Eric 的秘密菜园" browser-evidence/garden-dom.html
+            grep -q "本轮只升级土壤、边缘和天气" browser-evidence/garden-dom.html
+          fi
       - name: Keep build and browser evidence
         if: always()
         uses: actions/upload-artifact@v4

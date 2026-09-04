@@ -1,6 +1,8 @@
+import { mountDesktopHud, unmountDesktopHud } from "./desktop-hud";
 import "./portrait-mobile.css";
 
 const portraitPhone = window.matchMedia("(max-width: 760px) and (orientation: portrait)");
+const desktopWide = window.matchMedia("(min-width: 1240px) and (orientation: landscape)");
 
 let mounted = false;
 let allowStatsPassthrough = false;
@@ -20,16 +22,29 @@ window.addEventListener("keydown", (event) => {
   }
 });
 
-portraitPhone.addEventListener("change", applyPortraitMode);
-applyPortraitMode();
+portraitPhone.addEventListener("change", applyResponsiveMode);
+desktopWide.addEventListener("change", applyResponsiveMode);
+applyResponsiveMode();
 
-// Load the existing application only after the portrait adapter has had a chance
-// to move the original DOM nodes. main.ts keeps the single source of UI/game state.
+// Load the existing application only after the active viewport adapter has moved
+// the original DOM nodes. main.ts keeps the single source of UI/game state.
 void import("../main");
 
-function applyPortraitMode(): void {
-  if (portraitPhone.matches) mountPortraitHud();
-  else unmountPortraitHud();
+function applyResponsiveMode(): void {
+  if (portraitPhone.matches) {
+    unmountDesktopHud();
+    mountPortraitHud();
+    return;
+  }
+
+  if (desktopWide.matches) {
+    unmountPortraitHud();
+    mountDesktopHud();
+    return;
+  }
+
+  unmountPortraitHud();
+  unmountDesktopHud();
 }
 
 function mountPortraitHud(): void {
