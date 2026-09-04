@@ -63,7 +63,7 @@ fn pond_radius_at(x: f32, z: f32) -> f32 {
   return length(vec2f(warped_x, warped_z));
 }
 
-// WGSL mirror of terrain-surface.ts. P0 country grass and P1 reeds share the
+// WGSL mirror of terrain-surface.ts. Near garden grass and P1 reeds share the
 // same basin profile so no vegetation root floats above the carved terrain.
 fn terrain_height_at(x: f32, z: f32) -> f32 {
   let dx = max(0.0, abs(x) - 3.20);
@@ -167,60 +167,6 @@ fn near_vegetation_root(index: u32) -> vec3f {
   return vec3f(x, terrain_height_at(x, z) + 0.008, z);
 }
 
-fn country_vegetation_root(index: u32, cluster: u32) -> vec3f {
-  let instance = f32(index);
-  let cluster_f = f32(cluster);
-  let a = hash11(instance * 37.0 + cluster_f * 211.0 + 7.0);
-  let b = hash11(instance * 53.0 + cluster_f * 173.0 + 19.0);
-  let c = hash11(instance * 71.0 + cluster_f * 137.0 + 31.0);
-  let zone = (index * 2u + cluster) % 7u;
-  var x = 0.0;
-  var z = 0.0;
-
-  if (zone == 0u) {
-    x = 7.0 + a * 31.0;
-    z = -15.0 + b * 30.0;
-    let road = road_center_z(x);
-    if (abs(z - road) < 2.0) {
-      z = road + select(-1.0, 1.0, c > 0.5) * (2.1 + c * 1.8);
-    }
-  } else if (zone == 1u) {
-    x = -27.0 + a * 39.0;
-    z = -7.0 - b * 22.0;
-  } else if (zone == 2u) {
-    x = -18.0 + a * 48.0;
-    z = 8.0 + b * 22.0;
-  } else if (zone == 3u) {
-    x = -36.0 + a * 28.0;
-    z = -18.0 + b * 36.0;
-  } else if (zone == 4u) {
-    x = 10.0 + a * 26.0;
-    z = 10.0 + b * 19.0;
-  } else if (zone == 5u) {
-    x = -31.0 + a * 20.0;
-    z = 6.0 + b * 22.0;
-  } else {
-    x = -7.0 + a * 34.0;
-    z = -27.0 + b * 17.0;
-  }
-
-  x += (hash11(instance * 101.0 + cluster_f * 17.0) - 0.5) * 0.52;
-  z += (hash11(instance * 109.0 + cluster_f * 23.0) - 0.5) * 0.52;
-
-  // P0 country grass does not grow through the P1 water surface. Preserve the
-  // same draw and distribution, but push accidental pond-interior roots just
-  // beyond the wet bank where they read as ordinary meadow fringe.
-  let pond_radius = pond_radius_at(x, z);
-  if (pond_radius < 1.30) {
-    let scaled = (vec2f(x, z) - vec2f(-10.0, 10.5)) / vec2f(3.6, 2.6);
-    let direction = normalize(scaled + vec2f(0.00001, 0.0));
-    let pushed_radius = 1.32 + c * 0.16;
-    x = -10.0 + direction.x * 3.6 * pushed_radius;
-    z = 10.5 + direction.y * 2.6 * pushed_radius;
-  }
-  return vec3f(x, terrain_height_at(x, z) + 0.006, z);
-}
-
 fn leaf_angle(index: u32) -> f32 {
   if (index == 1u) { return 1.13; }
   if (index == 2u) { return 2.55; }
@@ -253,15 +199,9 @@ fn vs_main(input: VertexIn) -> VertexOut {
   let height_seed = hash11(instance * 67.0 + 23.0);
   let color_seed = hash11(instance * 71.0 + 29.0);
   let hue_seed = hash11(instance * 83.0 + 31.0);
-  let is_mid = input.part > 5.5;
-  let reed = is_pond_reed(input.instance_index) && !is_mid;
-  let mid_part = u32(max(0.0, input.part - 6.0) + 0.5);
-  let mid_cluster = mid_part / 3u;
-  let mid_active = input.instance_index < 1750u;
+  let reed = is_pond_reed(input.instance_index);
   let normal_near_root = near_vegetation_root(input.instance_index);
-  let near_root = select(normal_near_root, pond_reed_root(input.instance_index), reed);
-  let mid_root = country_vegetation_root(input.instance_index, mid_cluster);
-  let root = select(near_root, mid_root, is_mid);
+  let root = select(normal_near_root, pond_reed_root(input.instance_index), reed);
   let raw_understory = select(0.0, 1.0, hash11(instance * 17.0 + 3.0) > 0.72);
   let near_understory = select(raw_understory, 0.0, reed);
   let has_flower = hash11(instance * 43.0 + 13.0) > 0.955 && near_understory < 0.5 && !reed;
@@ -361,24 +301,6 @@ fn vs_main(input: VertexIn) -> VertexOut {
     normal = normalize(vec3f(rotated_normal.x, input.local_normal.y, rotated_normal.y));
     height_value = 1.0;
     flower_value = 1.0;
-  } else if (is_mid) {
-    let blade = mid_part % 3u;
-    let t = input.local_position.y;
-    let active_factor = select(0.0, 1.0, mid_active);
-    let blade_seed = hash11(instance * 113.0 + f32(blade) * 17.0 + f32(mid_cluster) * 43.0);
-    let yaw = seed * 6.2831853 + f32(blade) * 1.047 + f32(mid_cluster) * 0.61 + (blade_seed - 0.5) * 0.44;
-    let cluster_width = (0.38 + variation * 0.22) * active_factor;
-    let cluster_height = (0.34 + seed * 0.34) * (0.86 + blade_seed * 0.25) * active_factor;
-    let local_xz = rotate2(input.local_position.xz, yaw) * cluster_width;
-    let mid_bend = min(0.22, local_speed * local_speed * 0.0036) * cluster_height;
-    let wind_offset = wind_direction * mid_bend * t * t;
-    world += vec3f(local_xz.x + wind_offset.x, t * cluster_height, local_xz.y + wind_offset.y);
-    let rotated_normal = rotate2(input.local_normal.xz, yaw);
-    normal = normalize(vec3f(rotated_normal.x, 0.18, rotated_normal.y));
-    height_value = t;
-    flower_value = -1.0;
-    understory_value = 0.42;
-    bend = min(1.18, mid_bend * 2.2);
   }
 
   var output: VertexOut;
@@ -411,10 +333,6 @@ fn fs_main(input: VertexOut) -> @location(0) vec4f {
   } else if (input.flower > 0.5) {
     let warm = select(vec3f(0.96, 0.55, 0.68), vec3f(0.98, 0.80, 0.28), variation > 0.5);
     albedo = mix(warm, vec3f(0.96, 0.91, 0.74), smoothstep(0.82, 1.0, variation) * 0.34);
-  } else if (input.flower < -0.5) {
-    let low = mix(vec3f(0.095, 0.205, 0.045), vec3f(0.17, 0.29, 0.065), hue_seed);
-    let high = mix(vec3f(0.31, 0.43, 0.105), vec3f(0.43, 0.49, 0.135), hue_seed);
-    albedo = mix(low, high, smoothstep(0.02, 0.92, height)) * (0.84 + color_seed * 0.22);
   } else {
     let canopy = mix(vec3f(0.055, 0.18, 0.025), vec3f(0.40, 0.64, 0.14), smoothstep(0.0, 0.94, height));
     let under = mix(vec3f(0.035, 0.115, 0.018), vec3f(0.20, 0.42, 0.075), smoothstep(0.0, 0.92, height));
