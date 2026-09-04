@@ -1,5 +1,6 @@
 declare module "node:fs" {
   export function mkdirSync(path: string, options?: { readonly recursive?: boolean }): string | undefined;
+  export function readFileSync(path: string | URL, encoding: "utf8"): string;
   export function writeFileSync(path: string, data: Uint8Array): void;
 }
 
