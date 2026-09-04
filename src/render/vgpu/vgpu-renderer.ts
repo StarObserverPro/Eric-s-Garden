@@ -377,7 +377,7 @@ export class VgpuRenderer implements GardenRenderer {
       passes: 3,
       drawCalls: 7,
       instances: this.#qualityProfile.vegetationInstances + CROP_INSTANCE_COUNT + 3,
-      resources: 17 + this.#generation.vegetationBundles.size,
+      resources: 16 + this.#generation.vegetationBundles.size,
       dpr: Math.max(1, this.#canvas.width / Math.max(1, this.#canvas.clientWidth)),
     };
   }
