@@ -108,12 +108,12 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p browser-evidence
-          npx vite preview --host 127.0.0.1 --port 4173 >browser-evidence/vite-webgpu.log 2>&1 &
+          setsid npx vite preview --host 127.0.0.1 --port 4173 --strictPort >browser-evidence/vite-webgpu.log 2>&1 &
           SERVER_PID=$!
           SESSION="eric-webgpu-${GITHUB_RUN_ID}"
           cleanup() {
             agent-browser --session "$SESSION" close >/dev/null 2>&1 || true
-            kill "$SERVER_PID" 2>/dev/null || true
+            kill -- -"$SERVER_PID" 2>/dev/null || true
           }
           trap cleanup EXIT
 
@@ -154,20 +154,21 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p browser-evidence
-          npx vite preview --host 127.0.0.1 --port 4173 >browser-evidence/vite.log 2>&1 &
+          setsid npx vite preview --host 127.0.0.1 --port 4174 --strictPort >browser-evidence/vite.log 2>&1 &
           SERVER_PID=$!
-          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          trap 'kill -- -"$SERVER_PID" 2>/dev/null || true' EXIT
           for attempt in {1..40}; do
-            if curl -fsS http://127.0.0.1:4173/ >/dev/null; then
+            if curl -fsS http://127.0.0.1:4174/ >/dev/null; then
               break
             fi
             sleep 0.25
           done
-          curl -fsS http://127.0.0.1:4173/ >/dev/null
+          curl -fsS http://127.0.0.1:4174/ >/dev/null
           BROWSER="$(command -v google-chrome || command -v chromium || command -v chromium-browser)"
           test -n "$BROWSER"
 
           if [[ "$DESKTOP_HUD_EVIDENCE_REQUIRED" == "true" ]]; then
+            node --check tests/desktop-hud-browser-evidence.js
             cp dist/index.html dist/desktop-hud-evidence.html
             cp tests/desktop-hud-browser-evidence.js dist/desktop-hud-browser-evidence.js
             python3 - <<'PY'
@@ -198,7 +199,7 @@ jobs:
                 --virtual-time-budget=5000 \
                 --screenshot="$SCREENSHOT" \
                 --dump-dom \
-                "http://127.0.0.1:4173/desktop-hud-evidence.html?width=${WIDTH}&height=${HEIGHT}" >"$DOM"
+                "http://127.0.0.1:4174/desktop-hud-evidence.html?width=${WIDTH}&height=${HEIGHT}" >"$DOM"
 
               test -s "$SCREENSHOT"
               grep -q "Eric 的秘密菜园" "$DOM"
@@ -236,7 +237,7 @@ jobs:
               --virtual-time-budget=5000 \
               --screenshot=browser-evidence/garden-fallback.png \
               --dump-dom \
-              http://127.0.0.1:4173/ >browser-evidence/garden-dom.html
+              http://127.0.0.1:4174/ >browser-evidence/garden-dom.html
             test -s browser-evidence/garden-fallback.png
             grep -q "Eric 的秘密菜园" browser-evidence/garden-dom.html
             grep -q "本轮只升级土壤、边缘和天气" browser-evidence/garden-dom.html
