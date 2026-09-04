@@ -1,10 +1,15 @@
-import type { CropId, GameState } from "../game/model";
+import {
+  weatherIdForState,
+  type CropId,
+  type GameState,
+  type WeatherId,
+} from "../game/model";
 import { CAMERA_DEFAULT_ELEVATION, type CameraViewState } from "./camera-controls";
 
 export type Vec3 = readonly [number, number, number];
 
 export interface WeatherProfile {
-  readonly id: "sunny" | "partly-cloudy" | "cloudy" | "breezy" | "sunshower";
+  readonly id: WeatherId;
   readonly skyTop: Vec3;
   readonly skyHorizon: Vec3;
   readonly sunlight: number;
@@ -153,6 +158,8 @@ export function createSceneSnapshot(
     harvested: false,
   }));
   const plots = state.plots.length ? state.plots : emptyPlots;
+  const weatherId = weatherIdForState(state);
+  const weather = WEATHER.find((profile) => profile.id === weatherId) ?? WEATHER[0]!;
   return {
     camera: {
       angle: state.camera.angle,
@@ -160,7 +167,7 @@ export function createSceneSnapshot(
       elevation: cameraView.elevation,
     },
     level: state.level,
-    weather: WEATHER[state.level] ?? WEATHER[0]!,
+    weather,
     plots: plots.map((plot, index): ScenePlot => ({
       index,
       position: PLOT_POSITIONS[index] ?? [0, 0, 0],

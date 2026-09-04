@@ -179,7 +179,7 @@ function appendWorkCorner(output: number[]): void {
 function appendFieldBoundaries(output: number[]): void {
   const rng = mulberry32(0x5f3759df);
 
-  // Broken southwest hedge: staggered blobs and visible gaps, never a wall.
+  // Broken southwest hedge: staggered grounded masses and visible gaps, never a wall.
   const hedgeCenters: readonly Vec3[] = [
     [-14.5, 0, -9.5], [-12.8, 0, -9.0], [-10.9, 0, -8.7],
     [-8.7, 0, -8.0], [-6.8, 0, -7.2],
@@ -227,20 +227,50 @@ function appendTree(output: number[], x: number, z: number, scale: number, rng: 
 }
 
 function appendBushCluster(output: number[], center: Vec3, width: number, height: number, rng: Rng, seed: number): void {
-  const count = 3;
-  for (let index = 0; index < count; index += 1) {
-    const offsetX = (index - 1) * width * 0.40 + (rng() - 0.5) * 0.24;
-    const offsetZ = (rng() - 0.5) * 0.62;
-    const x = center[0] + offsetX;
-    const z = center[2] + offsetZ;
+  // One broad body owns the silhouette and is sunk slightly below the sampled
+  // terrain. Smaller closed lobes build an irregular top edge. This reads as a
+  // grounded hedge mass instead of three detached tumbleweed-like spheres.
+  const lobes = [
+    [0.00, 0.00, 0.46, 0.78, 0.58, 0.56, 2],
+    [-0.34, -0.10, 0.62, 0.50, 0.48, 0.43, 1],
+    [0.35, 0.08, 0.60, 0.54, 0.52, 0.45, 1],
+    [-0.06, 0.28, 0.55, 0.48, 0.46, 0.40, 1],
+  ] as const;
+
+  for (let index = 0; index < lobes.length; index += 1) {
+    const [lx, lz, lift, rx, ry, rz, subdivisions] = lobes[index]!;
+    const x = center[0] + lx * width + (rng() - 0.5) * width * 0.05;
+    const z = center[2] + lz * width + (rng() - 0.5) * width * 0.05;
     const ground = terrainHeightAt(x, z);
     appendLowPolyBlob(
       output,
-      [x, ground + height * 0.60, z],
-      [width * (0.50 + rng() * 0.14), height * (0.78 + rng() * 0.18), width * (0.42 + rng() * 0.12)],
-      2,
+      [x, ground + height * lift, z],
+      [
+        width * rx * (0.94 + rng() * 0.10),
+        height * ry * (0.94 + rng() * 0.10),
+        width * rz * (0.94 + rng() * 0.10),
+      ],
+      subdivisions,
       WILDERNESS_MATERIAL.foliage,
       seed + index * 0.09,
+    );
+  }
+
+  // Short woody stems are mostly occluded by the foliage body, but the glimpses
+  // at the lower edge make the object read as a rooted shrub rather than a ball.
+  for (let index = 0; index < 2; index += 1) {
+    const x = center[0] + (index === 0 ? -0.16 : 0.18) * width;
+    const z = center[2] + (index === 0 ? 0.05 : -0.08) * width;
+    const ground = terrainHeightAt(x, z);
+    const stemHeight = height * (0.42 + index * 0.04);
+    appendCylinder(
+      output,
+      [x, ground + stemHeight * 0.5, z],
+      width * 0.028,
+      stemHeight,
+      6,
+      WILDERNESS_MATERIAL.wood,
+      seed + 0.51 + index * 0.07,
     );
   }
 }
@@ -417,8 +447,9 @@ function appendTorusVertical(output: number[], center: Vec3, major: number, mino
 }
 
 function appendLowPolyBlob(output: number[], center: Vec3, radius: Vec3, subdivisions: number, material: number, seed: number): void {
-  // Start from an octahedron and split each face. Two subdivision rounds remain
-  // inexpensive while producing a tree/bush silhouette that survives low views.
+  // Start from an octahedron and split each face. Flat shading is kept, but
+  // deformation belongs to logical vertices rather than individual faces.
+  // That distinction is what keeps every subdivided edge geometrically closed.
   let faces: [Vec3, Vec3, Vec3][] = [
     [[0, 1, 0], [1, 0, 0], [0, 0, 1]], [[0, 1, 0], [0, 0, 1], [-1, 0, 0]],
     [[0, 1, 0], [-1, 0, 0], [0, 0, -1]], [[0, 1, 0], [0, 0, -1], [1, 0, 0]],
@@ -435,14 +466,27 @@ function appendLowPolyBlob(output: number[], center: Vec3, radius: Vec3, subdivi
     }
     faces = next;
   }
+
+  const transformed = new Map<string, Vec3>();
+  const transform = (point: Vec3): Vec3 => {
+    const key = `${Math.round(point[0] * 1_000_000)}:${Math.round(point[1] * 1_000_000)}:${Math.round(point[2] * 1_000_000)}`;
+    const cached = transformed.get(key);
+    if (cached) return cached;
+    const warp = 0.91 + hash2(
+      seed * 13 + point[0] * 37 + point[1] * 17,
+      seed * 19 + point[2] * 29 - point[1] * 11,
+    ) * 0.18;
+    const value: Vec3 = [
+      center[0] + point[0] * radius[0] * warp,
+      center[1] + point[1] * radius[1] * warp,
+      center[2] + point[2] * radius[2] * warp,
+    ];
+    transformed.set(key, value);
+    return value;
+  };
+
   for (let index = 0; index < faces.length; index += 1) {
     const [a, b, c] = faces[index]!;
-    const warp = 0.92 + hash2(seed * 13 + index, seed * 19 - index) * 0.16;
-    const transform = (p: Vec3): Vec3 => [
-      center[0] + p[0] * radius[0] * warp,
-      center[1] + p[1] * radius[1] * warp,
-      center[2] + p[2] * radius[2] * warp,
-    ];
     pushFlatTriangle(output, transform(a), transform(b), transform(c), material, seed + index * 0.001, 0);
   }
 }

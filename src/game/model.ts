@@ -12,6 +12,7 @@ export const CROPS = {
 
 export type CropId = keyof typeof CROPS;
 export type Tool = "harvest" | "water" | "spray";
+export type WeatherId = "sunny" | "partly-cloudy" | "cloudy" | "breezy" | "sunshower";
 
 export interface Question {
   readonly text: string;
@@ -87,6 +88,22 @@ export const LEVELS: readonly Level[] = [
     },
   },
 ] as const;
+
+const WEATHER_IDS: readonly WeatherId[] = [
+  "sunny",
+  "partly-cloudy",
+  "cloudy",
+  "breezy",
+  "sunshower",
+];
+const WEATHER_STEPS = [1, 2, 3, 4] as const;
+export const WEATHER_LABELS: Readonly<Record<WeatherId, string>> = {
+  sunny: "☀️ 晴朗",
+  "partly-cloudy": "🌤️ 晴间多云",
+  cloudy: "🌥️ 多云",
+  breezy: "🍃 微风",
+  sunshower: "🌦️ 太阳雨",
+};
 
 export interface GardenLogEntry {
   readonly icon: string;
@@ -194,8 +211,26 @@ export function resetState(storage: StorageLike): GameState {
   return state;
 }
 
+export function weatherIdForState(state: Pick<GameState, "level" | "round">): WeatherId {
+  const level = Math.max(0, Math.min(LEVELS.length - 1, Math.floor(state.level)));
+  const round = Math.max(0, Math.min(MAX_STAGE, Math.floor(state.round)));
+  let seed = (Math.imul(level + 1, 0x9e3779b1) ^ 0xa511e9b3) >>> 0;
+  seed = (seed ^ (seed >>> 16)) >>> 0;
+  seed = Math.imul(seed, 0x7feb352d) >>> 0;
+  seed = (seed ^ (seed >>> 15)) >>> 0;
+  seed = Math.imul(seed, 0x846ca68b) >>> 0;
+  seed = (seed ^ (seed >>> 16)) >>> 0;
+  const offset = seed % WEATHER_IDS.length;
+  const step = WEATHER_STEPS[(seed >>> 8) % WEATHER_STEPS.length]!;
+  return WEATHER_IDS[(offset + round * step) % WEATHER_IDS.length]!;
+}
+
 export function currentLevel(state: GameState): Level {
-  return LEVELS[Math.max(0, Math.min(LEVELS.length - 1, state.level))] ?? LEVELS[0]!;
+  const base = LEVELS[Math.max(0, Math.min(LEVELS.length - 1, state.level))] ?? LEVELS[0]!;
+  return {
+    ...base,
+    weather: WEATHER_LABELS[weatherIdForState(state)],
+  };
 }
 
 export function totalTarget(state: GameState): number {

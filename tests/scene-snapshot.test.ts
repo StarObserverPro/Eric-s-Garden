@@ -1,6 +1,12 @@
 import { describe, expect, test } from "vitest";
 
-import { blankState, plant } from "../src/game/model";
+import {
+  WEATHER_LABELS,
+  blankState,
+  currentLevel,
+  plant,
+  weatherIdForState,
+} from "../src/game/model";
 import {
   PLOT_POSITIONS,
   createSceneSnapshot,
@@ -16,16 +22,35 @@ describe("renderer-neutral scene snapshot", () => {
     expect(snapshot.plots.map((plot) => plot.position)).toEqual(PLOT_POSITIONS);
   });
 
-  test("carries gameplay wetness and level weather without renderer state", () => {
+  test("carries gameplay wetness and the same procedural weather used by the HUD", () => {
     const state = blankState();
     plant(state);
     state.plots[3]!.watered = true;
     state.level = 4;
+    state.round = 3;
+    const expectedWeather = weatherIdForState(state);
     const snapshot = createSceneSnapshot(state);
     expect(snapshot.plots[3]!.wetness).toBe(1);
     expect(snapshot.plots[2]!.wetness).toBe(0);
-    expect(snapshot.weather.id).toBe("sunshower");
-    expect(snapshot.weather.rain).toBeGreaterThan(0);
+    expect(snapshot.weather.id).toBe(expectedWeather);
+    expect(currentLevel(state).weather).toBe(WEATHER_LABELS[expectedWeather]);
+  });
+
+  test("deterministic weather shuffle visits all five weather families across growth rounds", () => {
+    for (let level = 0; level < 5; level += 1) {
+      const state = blankState();
+      state.level = level;
+      const ids = Array.from({ length: 5 }, (_, round) => {
+        state.round = round;
+        const first = weatherIdForState(state);
+        const second = weatherIdForState(state);
+        expect(second).toBe(first);
+        expect(createSceneSnapshot(state).weather.id).toBe(first);
+        expect(currentLevel(state).weather).toBe(WEATHER_LABELS[first]);
+        return first;
+      });
+      expect(new Set(ids).size).toBe(5);
+    }
   });
 
   test("adds restrained neutral diffuse radiance instead of a second directional light", () => {
