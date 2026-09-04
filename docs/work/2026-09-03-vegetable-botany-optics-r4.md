@@ -1,6 +1,6 @@
 # Vegetable botany and optics refinement R4
 
-Status: executing
+Status: review
 Base main SHA: bf1055cc01e2187f4a24d453f9bb895d507a8449
 
 ## Objective
@@ -23,12 +23,14 @@ Close the two remaining visible R3 defects—tomato canopy readability and lettu
 - Architecture boundary touched: no.
 
 ## Current state
-- Completed: A2–A4; R3 merged in PR #18; the geometry validation timeout was removed by replacing per-float assertion overhead with one complete scan plus summary assertions; R4 run `33829264906` was fully green and its fixed evidence showed the lettuce silhouette improvement.
-- Current step: final tomato canopy pass expands only high-flex compound-leaf carriers from +18% to +30%; shader/model/Node/build and crop evidence steps are green in run `33829584060`.
-- Next action: inspect the final tomato node-detail artifact after the workflow uploads it, then move to review if A1/A5 remain visually satisfied.
-- Blocker: run `33829584060` is currently waiting in the unchanged `Capture the playable Canvas fallback` Chrome screenshot step after all crop checks/evidence completed; do not weaken or bypass that gate.
+- Completed: A1–A5. R3 merged in PR #18. The crop geometry timeout was fixed without increasing the timeout by replacing roughly 290k per-float Vitest assertions with one complete finite/normal scan plus summary assertions. R4 preserves all existing crop topology and render ownership while refining only the tomato and lettuce presentation.
+- Current step: review PR #20.
+- Next action: merge only after explicit approval.
+- Blocker: none.
 
 ## Evidence
 - R3 Verify run `33828605126`: fully green after the assertion-scan optimization.
-- R4 Verify run `33829264906`: fully green; fixed node/rosette evidence captured; renderer-architecture WebGPU probe correctly skipped because R4 is crop-shader-only.
-- R4 final-canopy run `33829584060`: shader/model/mock/Node/build, crop visual evidence, botanical detail evidence, and crop-soil contact all green; unchanged Canvas fallback tail still in progress at last check.
+- R4 Verify run `33829264906`: fully green; fixed node/rosette evidence showed the lettuce silhouette improvement.
+- R4 final shader code pass `33829584060`: shader/model/mock/Node/build and all crop evidence green; one runner later stalled in the unchanged Canvas fallback step.
+- Final PR-head Verify run `33830009739`: fully green, including crop lineup, botanical node/rosette detail, crop-soil contact, Canvas fallback, and artifact upload. Renderer-architecture WebGPU probe correctly skipped because R4 changes only crop presentation, not renderer architecture.
+- Final visual review: tomato high-flex compound leaves expand around their real stem-node anchors while low-flex calyx/sepal carriers stay unchanged; lettuce remains 24 independent crown leaves with less concentric yaw, broader/blunter distal blades, and distinct inner/outer posture.
