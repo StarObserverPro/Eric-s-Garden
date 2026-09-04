@@ -1,6 +1,6 @@
 # Remove legacy ground/box path
 
-Status: executing
+Status: review
 Base main SHA: 36afd4614afdbf22b997bb1916de308b9e046030
 
 ## Objective
@@ -21,10 +21,13 @@ Retire the still-active legacy ground box and delete the now-dead plot/path/fenc
 - Architecture boundary touched: no; the existing vgpu renderer remains the single frame/resource owner.
 
 ## Current state
-- Completed: none
-- Current step: remove legacy box ownership from the renderer and shader.
-- Next action: run residual-reference review and repository verification on the PR head.
+- Completed: A1, A2, A3
+- Current step: exact-final-head verification and PR review.
+- Next action: merge only after explicit release authorization.
 - Blocker: none; open wilderness P0 also edits `geometry.ts`, but only around vegetation additions, so this branch stays based on fresh `main` and keeps its change bounded.
 
 ## Evidence
-- Pending: shader validation, tests/build, residual-reference review, exact PR diff.
+- Residual-reference review: updated renderer contains no `boxGeometry` or `garden-ground`; `garden.wgsl` contains no `BoxPlacement`, plot/path/fence box placement, or box material dispatch.
+- Renderer accounting after retirement: 3 passes, 7 draws, fixed non-vegetation/crop instance overhead 3, base resources 16 plus vegetation tier bundles.
+- Verify run #132 on implementation head `f0636bb70ce4df1d858e132213734bb18314a59f`: shader/model/mock/Node/build and deterministic visual evidence passed through the browser-probe install stage; final browser/lifecycle result superseded by the final packet commit and must be checked on the new exact head.
+- PR: #25.
