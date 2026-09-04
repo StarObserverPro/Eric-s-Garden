@@ -22,6 +22,11 @@ import {
 import { perspectiveCamera } from "vgpu/scene";
 
 import type { CropId } from "../../game/model";
+import {
+  cameraDollyZoom,
+  cameraVerticalFovDegrees,
+  cameraVerticalPose,
+} from "../../scene/camera-controls";
 import type { GardenSceneSnapshot, Vec3, WeatherProfile } from "../../scene/snapshot";
 import {
   INSTANCE_TIERS,
@@ -447,6 +452,7 @@ export class VgpuRenderer implements GardenRenderer {
     const width = this.#canvas.clientWidth;
     const height = this.#canvas.clientHeight;
     const zoom = this.#snapshot.camera.zoom;
+    const markerScale = Math.min(1.6, zoom);
     this.#projectedPlots = [];
 
     for (let index = 0; index < this.#markers.length; index += 1) {
@@ -482,7 +488,7 @@ export class VgpuRenderer implements GardenRenderer {
       marker.root.style.left = `${plantPoint.x}px`;
       marker.root.style.top = `${plantPoint.y}px`;
       marker.root.style.zIndex = String(Math.round(plantPoint.y));
-      marker.root.style.setProperty("--crop-scale", String(zoom));
+      marker.root.style.setProperty("--crop-scale", String(markerScale));
       marker.badge.textContent = plot.pest ? "🐛" : plot.stage >= 4 ? "✨" : "";
     }
   }
@@ -868,24 +874,30 @@ function setSoilUniforms(
 
 function cameraFor(snapshot: GardenSceneSnapshot, size: readonly [number, number]): CameraState {
   const orbit = snapshot.camera.angle + Math.PI * 0.25;
-  const distance = 12.6 / snapshot.camera.zoom;
+  const dollyZoom = cameraDollyZoom(snapshot.camera.zoom);
+  const distance = 12.6 / dollyZoom;
+  const vertical = cameraVerticalPose(snapshot.camera.zoom, snapshot.camera.elevation);
   const position: Vec3 = [
     Math.sin(orbit) * distance,
-    7.6 / snapshot.camera.zoom,
+    vertical.positionY,
     Math.cos(orbit) * distance,
   ];
   const aspect = size[0] / Math.max(1, size[1]);
-  const fov = 42;
+  const fov = cameraVerticalFovDegrees(snapshot.camera.zoom);
   const camera = perspectiveCamera({
     fov,
     aspect,
     near: 0.1,
     far: 80,
     position,
-    target: [0, -0.12, 0],
+    target: [0, vertical.targetY, 0],
   });
 
-  const skyForward = normalize3([-Math.sin(orbit), 0.055, -Math.cos(orbit)]);
+  const skyForward = normalize3([
+    -Math.sin(orbit),
+    0.055 * snapshot.camera.elevation,
+    -Math.cos(orbit),
+  ]);
   const skyRight = normalize3(cross3(skyForward, [0, 1, 0]));
   const skyUp = normalize3(cross3(skyRight, skyForward));
   return {
