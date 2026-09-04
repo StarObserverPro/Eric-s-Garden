@@ -7,7 +7,10 @@ import {
   type Target,
 } from "vgpu";
 
-import { createHardscapeGeometryData } from "./hardscape-geometry";
+import {
+  createWildernessHardscapeGeometryData,
+  HARDSCAPE_VERTEX_STRIDE_FLOATS,
+} from "./wilderness-hardscape-geometry";
 import hardscapeShader from "./shaders/hardscape.wgsl";
 
 export interface HardscapeUniforms {
@@ -33,14 +36,14 @@ export async function createHardscapeLayer(
   target: Target,
   uniforms: HardscapeUniforms,
 ): Promise<HardscapeLayer> {
-  const data = createHardscapeGeometryData();
+  const data = createWildernessHardscapeGeometryData();
   let hardscapeGeometry: Geometry | undefined;
   try {
     hardscapeGeometry = geometry(gpu, {
       label: `garden-hardscape-${data.stats.triangleCount}-triangles`,
       buffers: [{
         data: data.data.buffer,
-        stride: 36,
+        stride: HARDSCAPE_VERTEX_STRIDE_FLOATS * 4,
         attributes: {
           world_position: "float32x3",
           world_normal: "float32x3",
@@ -54,7 +57,7 @@ export async function createHardscapeLayer(
       shader: hardscapeShader,
       geometry: hardscapeGeometry,
       cull: "none",
-      label: "garden-hardscape",
+      label: "garden-hardscape-wilderness-p0",
     });
     setHardscapeUniforms(hardscape, uniforms);
     await hardscape.compile(target);
