@@ -447,6 +447,7 @@ export class VgpuRenderer implements GardenRenderer {
     const width = this.#canvas.clientWidth;
     const height = this.#canvas.clientHeight;
     const zoom = this.#snapshot.camera.zoom;
+    const markerScale = Math.min(1.6, zoom);
     this.#projectedPlots = [];
 
     for (let index = 0; index < this.#markers.length; index += 1) {
@@ -482,7 +483,7 @@ export class VgpuRenderer implements GardenRenderer {
       marker.root.style.left = `${plantPoint.x}px`;
       marker.root.style.top = `${plantPoint.y}px`;
       marker.root.style.zIndex = String(Math.round(plantPoint.y));
-      marker.root.style.setProperty("--crop-scale", String(zoom));
+      marker.root.style.setProperty("--crop-scale", String(markerScale));
       marker.badge.textContent = plot.pest ? "🐛" : plot.stage >= 4 ? "✨" : "";
     }
   }
