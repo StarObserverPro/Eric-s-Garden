@@ -92,11 +92,11 @@ fn terrain_height_at(x: f32, z: f32) -> f32 {
   let pond_radius = pond_radius_at(x, z);
   if (pond_radius >= 1.28) { return base_surface; }
   let bowl = smoothstep(0.0, 0.94, pond_radius);
-  let target = POND_WATER_Y
+  let target_height = POND_WATER_Y
     - 0.46 * (1.0 - bowl)
     + max(0.0, pond_radius - 0.72) * 0.15;
   let carve = 1.0 - smoothstep(0.90, 1.28, pond_radius);
-  return mix(base_surface, min(base_surface, target), carve);
+  return mix(base_surface, min(base_surface, target_height), carve);
 }
 
 fn road_center_z(x: f32) -> f32 {
@@ -364,11 +364,11 @@ fn vs_main(input: VertexIn) -> VertexOut {
   } else if (is_mid) {
     let blade = mid_part % 3u;
     let t = input.local_position.y;
-    let active = select(0.0, 1.0, mid_active);
+    let active_factor = select(0.0, 1.0, mid_active);
     let blade_seed = hash11(instance * 113.0 + f32(blade) * 17.0 + f32(mid_cluster) * 43.0);
     let yaw = seed * 6.2831853 + f32(blade) * 1.047 + f32(mid_cluster) * 0.61 + (blade_seed - 0.5) * 0.44;
-    let cluster_width = (0.38 + variation * 0.22) * active;
-    let cluster_height = (0.34 + seed * 0.34) * (0.86 + blade_seed * 0.25) * active;
+    let cluster_width = (0.38 + variation * 0.22) * active_factor;
+    let cluster_height = (0.34 + seed * 0.34) * (0.86 + blade_seed * 0.25) * active_factor;
     let local_xz = rotate2(input.local_position.xz, yaw) * cluster_width;
     let mid_bend = min(0.22, local_speed * local_speed * 0.0036) * cluster_height;
     let wind_offset = wind_direction * mid_bend * t * t;
