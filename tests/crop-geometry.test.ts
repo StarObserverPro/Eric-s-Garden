@@ -34,18 +34,27 @@ test("crop vertices are finite, normalized and include all species/material fami
   const { data } = createCropGeometryData();
   const crops = new Set<number>();
   const materials = new Set<number>();
+  let firstNonFinite = -1;
+  let minNormalLength = Number.POSITIVE_INFINITY;
+  let maxNormalLength = Number.NEGATIVE_INFINITY;
 
   for (let offset = 0; offset < data.length; offset += CROP_VERTEX_STRIDE_FLOATS) {
     for (let lane = 0; lane < CROP_VERTEX_STRIDE_FLOATS; lane += 1) {
-      expect(Number.isFinite(data[offset + lane]!)).toBe(true);
+      if (firstNonFinite < 0 && !Number.isFinite(data[offset + lane]!)) {
+        firstNonFinite = offset + lane;
+      }
     }
+
     const normalLength = Math.hypot(data[offset + 3]!, data[offset + 4]!, data[offset + 5]!);
-    expect(normalLength).toBeGreaterThan(0.98);
-    expect(normalLength).toBeLessThan(1.02);
+    minNormalLength = Math.min(minNormalLength, normalLength);
+    maxNormalLength = Math.max(maxNormalLength, normalLength);
     crops.add(Math.round(data[offset + CROP_OFFSET]!));
     materials.add(Math.round(data[offset + MATERIAL_OFFSET]!));
   }
 
+  expect(firstNonFinite, "all crop carrier floats must remain finite").toBe(-1);
+  expect(minNormalLength).toBeGreaterThan(0.98);
+  expect(maxNormalLength).toBeLessThan(1.02);
   expect([...crops].sort()).toEqual([0, 1, 2, 3, 4, 5]);
   expect([...materials].sort()).toEqual([0, 1, 2, 3, 4]);
 });
