@@ -4,16 +4,16 @@ import { expect, test } from "vitest";
 import { draw, frame, geometry, init, target, type Frame, type FramePass, type Target } from "vgpu/node";
 import { perspectiveCamera } from "vgpu/scene";
 
-import { createHardscapeGeometryData } from "../src/render/vgpu/hardscape-geometry";
+import { createWildernessHardscapeGeometryData } from "../src/render/vgpu/wilderness-hardscape-geometry";
 import hardscapeShader from "../src/render/vgpu/shaders/hardscape.wgsl";
 
 const WIDTH = 480;
 const HEIGHT = 360;
 
-test("hardscape renderer produces visible packed earth, stone and wood geometry", async () => {
+test("hardscape renderer produces visible garden terrain and P0 countryside scenery", async () => {
   const gpu = await init({ label: "eric-garden-hardscape-evidence" });
   const output = target(gpu, { size: [WIDTH, HEIGHT], format: "rgba8unorm", depth: true });
-  const hardscapeData = createHardscapeGeometryData();
+  const hardscapeData = createWildernessHardscapeGeometryData();
   const hardscapeGeometry = geometry(gpu, {
     buffers: [{
       data: hardscapeData.data.buffer,
@@ -28,14 +28,14 @@ test("hardscape renderer produces visible packed earth, stone and wood geometry"
     }],
   });
   const hardscape = draw(gpu, { shader: hardscapeShader, geometry: hardscapeGeometry, cull: "none" });
-  const cameraPosition = [6.2, 5.0, 7.1] as const;
+  const cameraPosition = [12.5, 6.1, 11.5] as const;
   const camera = perspectiveCamera({
-    fov: 42,
+    fov: 44,
     aspect: WIDTH / HEIGHT,
     near: 0.1,
-    far: 80,
+    far: 100,
     position: cameraPosition,
-    target: [0, -0.08, 0],
+    target: [4.2, 0.20, 0.25],
   });
   hardscape.set({
     viewProjection: camera.viewProjection,
@@ -56,6 +56,8 @@ test("hardscape renderer produces visible packed earth, stone and wood geometry"
   const pixels = await output.read();
   let changedPixels = 0;
   let warmPixels = 0;
+  let darkPixels = 0;
+  let greenPixels = 0;
   let minLuma = 255;
   let maxLuma = 0;
   const clear = [46, 71, 41] as const;
@@ -66,12 +68,16 @@ test("hardscape renderer produces visible packed earth, stone and wood geometry"
     const delta = Math.abs(r - clear[0]) + Math.abs(g - clear[1]) + Math.abs(b - clear[2]);
     if (delta > 24) changedPixels += 1;
     if (r > b * 1.30 && r > g * 1.06) warmPixels += 1;
+    if (r + g + b < 145) darkPixels += 1;
+    if (g > r * 1.18 && g > b * 1.10) greenPixels += 1;
     const luma = Math.round(r * 0.299 + g * 0.587 + b * 0.114);
     minLuma = Math.min(minLuma, luma);
     maxLuma = Math.max(maxLuma, luma);
   }
-  expect(changedPixels).toBeGreaterThan(8_000);
-  expect(warmPixels).toBeGreaterThan(1_000);
+  expect(changedPixels).toBeGreaterThan(10_000);
+  expect(warmPixels).toBeGreaterThan(900);
+  expect(darkPixels).toBeGreaterThan(250);
+  expect(greenPixels).toBeGreaterThan(1_000);
   expect(maxLuma - minLuma).toBeGreaterThan(30);
 
   const evidencePath = process.env.HARDSCAPE_EVIDENCE_PATH;
