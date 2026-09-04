@@ -10,6 +10,8 @@ struct Uniforms {
 };
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
 
+const POND_WATER_Y: f32 = -0.4353148;
+
 struct VertexIn {
   @location(0) local_position: vec3f,
   @location(1) local_normal: vec3f,
@@ -24,6 +26,7 @@ struct VertexOut {
   @location(2) blade: vec4f,
   @location(3) flower: f32,
   @location(4) tone: vec2f,
+  @location(5) plant_kind: f32,
 };
 
 fn hash11(value: f32) -> f32 {
@@ -51,8 +54,17 @@ fn rotate2(value: vec2f, angle: f32) -> vec2f {
   return vec2f(value.x * c - value.y * s, value.x * s + value.y * c);
 }
 
-// WGSL mirror of terrain-surface.ts. Vegetation roots use the same analytic
-// height field as the hardscape mesh, including the broad distant country.
+fn pond_radius_at(x: f32, z: f32) -> f32 {
+  let delta = (vec2f(x, z) - vec2f(-10.0, 10.5)) / vec2f(3.6, 2.6);
+  let warped_x = delta.x
+    + sin(delta.y * 2.7 + 0.4) * 0.055
+    + sin((delta.x - delta.y) * 4.1) * 0.025;
+  let warped_z = delta.y + sin(delta.x * 3.1 - 1.1) * 0.045;
+  return length(vec2f(warped_x, warped_z));
+}
+
+// WGSL mirror of terrain-surface.ts. P0 country grass and P1 reeds share the
+// same basin profile so no vegetation root floats above the carved terrain.
 fn terrain_height_at(x: f32, z: f32) -> f32 {
   let dx = max(0.0, abs(x) - 3.20);
   let dz = max(0.0, abs(z) - 2.55);
@@ -66,8 +78,8 @@ fn terrain_height_at(x: f32, z: f32) -> f32 {
     + broad * broad_amplitude
     + fine * fine_amplitude;
 
-  let radius = length(vec2f(x, z));
-  let far_influence = smoothstep(12.0, 38.0, radius);
+  let world_radius = length(vec2f(x, z));
+  let far_influence = smoothstep(12.0, 38.0, world_radius);
   let distant_broad = value_noise(vec2f(x * 0.031 + 8.7, z * 0.031 - 4.9)) - 0.5;
   let distant_medium = value_noise(vec2f(x * 0.071 - 12.4, z * 0.071 + 6.2)) - 0.5;
   let far_rise = far_influence * (
@@ -75,12 +87,40 @@ fn terrain_height_at(x: f32, z: f32) -> f32 {
     + distant_broad * 2.20
     + distant_medium * 1.10
   );
-  return local_surface + far_rise;
+  let base_surface = local_surface + far_rise;
+
+  let pond_radius = pond_radius_at(x, z);
+  if (pond_radius >= 1.28) { return base_surface; }
+  let bowl = smoothstep(0.0, 0.94, pond_radius);
+  let target_height = POND_WATER_Y
+    - 0.46 * (1.0 - bowl)
+    + max(0.0, pond_radius - 0.72) * 0.15;
+  let carve = 1.0 - smoothstep(0.90, 1.28, pond_radius);
+  return mix(base_surface, min(base_surface, target_height), carve);
 }
 
 fn road_center_z(x: f32) -> f32 {
   let distance = max(0.0, x - 4.65);
   return 0.20 + sin(distance * 0.31) * 0.48 + sin(distance * 0.12 + 0.7) * 0.24;
+}
+
+fn is_pond_reed(index: u32) -> bool {
+  if (index < 500u) { return index % 50u == 0u; }
+  if (index < 1500u) { return index % 30u == 0u; }
+  return index % 24u == 0u;
+}
+
+fn pond_reed_root(index: u32) -> vec3f {
+  let serial = f32(index);
+  let cluster = f32((index / 17u) % 7u);
+  let cluster_angle = cluster / 7.0 * 6.2831853;
+  let jitter = (hash11(serial * 0.73 + 11.0) - 0.5) * 0.42;
+  let angle = cluster_angle + jitter;
+  let radius = 0.78 + hash11(serial * 1.37 + 23.0) * 0.22;
+  let clump = (hash11(serial * 2.17 + 41.0) - 0.5) * 0.18;
+  let x = -10.0 + cos(angle) * 3.6 * (radius + clump * 0.45);
+  let z = 10.5 + sin(angle) * 2.6 * (radius + clump);
+  return vec3f(x, terrain_height_at(x, z) + 0.006, z);
 }
 
 fn near_vegetation_root(index: u32) -> vec3f {
@@ -93,8 +133,6 @@ fn near_vegetation_root(index: u32) -> vec3f {
   var x = 0.0;
   var z = 0.0;
 
-  // Four fence-foot families, with the east family explicitly split around
-  // the gate rather than recreating a rectangular grass ring.
   if (region == 0u) {
     x = -4.65 + along * 9.30;
     z = -3.48 - depth * 0.78 + wiggle;
@@ -112,16 +150,13 @@ fn near_vegetation_root(index: u32) -> vec3f {
       z = 1.34 + (along - 0.5) * 4.0;
     }
   } else if (region == 4u || region == 5u) {
-    // Uneven road verges carry detailed grass close to the gate/work corner.
     x = 5.10 + along * 9.30;
     let side = select(-1.0, 1.0, region == 5u);
     z = road_center_z(x) + side * (0.92 + depth * 0.58) + wiggle * 0.55;
   } else if (region == 6u) {
-    // Work-corner weeds, biased toward hay/crate edges rather than wheel paths.
     x = 6.20 + along * 5.70;
     z = 1.75 + depth * 2.20 + wiggle;
   } else {
-    // Sparse corner clumps break the remaining fence regularity.
     let corner = u32(floor(along * 4.0));
     let local_a = hash11(serial * 89.0 + 13.0);
     let local_b = hash11(serial * 97.0 + 29.0);
@@ -169,10 +204,20 @@ fn country_vegetation_root(index: u32, cluster: u32) -> vec3f {
     z = -27.0 + b * 17.0;
   }
 
-  let jitter_x = (hash11(instance * 101.0 + cluster_f * 17.0) - 0.5) * 0.52;
-  let jitter_z = (hash11(instance * 109.0 + cluster_f * 23.0) - 0.5) * 0.52;
-  x += jitter_x;
-  z += jitter_z;
+  x += (hash11(instance * 101.0 + cluster_f * 17.0) - 0.5) * 0.52;
+  z += (hash11(instance * 109.0 + cluster_f * 23.0) - 0.5) * 0.52;
+
+  // P0 country grass does not grow through the P1 water surface. Preserve the
+  // same draw and distribution, but push accidental pond-interior roots just
+  // beyond the wet bank where they read as ordinary meadow fringe.
+  let pond_radius = pond_radius_at(x, z);
+  if (pond_radius < 1.30) {
+    let scaled = (vec2f(x, z) - vec2f(-10.0, 10.5)) / vec2f(3.6, 2.6);
+    let direction = normalize(scaled + vec2f(0.00001, 0.0));
+    let pushed_radius = 1.32 + c * 0.16;
+    x = -10.0 + direction.x * 3.6 * pushed_radius;
+    z = 10.5 + direction.y * 2.6 * pushed_radius;
+  }
   return vec3f(x, terrain_height_at(x, z) + 0.006, z);
 }
 
@@ -209,14 +254,17 @@ fn vs_main(input: VertexIn) -> VertexOut {
   let color_seed = hash11(instance * 71.0 + 29.0);
   let hue_seed = hash11(instance * 83.0 + 31.0);
   let is_mid = input.part > 5.5;
+  let reed = is_pond_reed(input.instance_index) && !is_mid;
   let mid_part = u32(max(0.0, input.part - 6.0) + 0.5);
   let mid_cluster = mid_part / 3u;
   let mid_active = input.instance_index < 1750u;
-  let near_root = near_vegetation_root(input.instance_index);
+  let normal_near_root = near_vegetation_root(input.instance_index);
+  let near_root = select(normal_near_root, pond_reed_root(input.instance_index), reed);
   let mid_root = country_vegetation_root(input.instance_index, mid_cluster);
   let root = select(near_root, mid_root, is_mid);
-  let near_understory = select(0.0, 1.0, hash11(instance * 17.0 + 3.0) > 0.72);
-  let has_flower = hash11(instance * 43.0 + 13.0) > 0.955 && near_understory < 0.5;
+  let raw_understory = select(0.0, 1.0, hash11(instance * 17.0 + 3.0) > 0.72);
+  let near_understory = select(raw_understory, 0.0, reed);
+  let has_flower = hash11(instance * 43.0 + 13.0) > 0.955 && near_understory < 0.5 && !reed;
 
   let prevailing = normalize(vec2f(-0.84, 0.54));
   let along = dot(root.xz, prevailing);
@@ -253,7 +301,28 @@ fn vs_main(input: VertexIn) -> VertexOut {
   var flower_value = 0.0;
   var understory_value = near_understory;
 
-  if (input.part < 4.5) {
+  if (reed) {
+    if (input.part < 2.5) {
+      let leaf = u32(input.part + 0.5);
+      let t = input.local_position.y;
+      let yaw = seed * 6.2831853 + f32(leaf) * 1.91 + variation * 0.26;
+      let reed_height = (0.76 + seed * 0.52) * (0.88 + height_seed * 0.24);
+      let reed_width = 0.014 + variation * 0.012;
+      let width_direction = vec2f(cos(yaw), sin(yaw));
+      let width_offset = width_direction * input.local_position.x * reed_width;
+      let reed_sway = sin(
+        uniforms.scene.x * 0.76 + root.x * 0.27 + root.z * 0.19 + f32(leaf) * 0.71
+      ) * (0.025 + uniforms.scene.y * 0.075);
+      let sway_shape = t * t * (1.0 - 0.18 * t);
+      let sway_offset = prevailing * reed_sway * reed_height * sway_shape;
+      world += vec3f(width_offset.x + sway_offset.x, t * reed_height, width_offset.y + sway_offset.y);
+      let width_tangent = normalize(vec3f(width_direction.x, 0.0, width_direction.y));
+      let height_tangent = normalize(vec3f(prevailing.x * reed_sway * 1.6 * t, 1.0, prevailing.y * reed_sway * 1.6 * t));
+      normal = normalize(cross(width_tangent, height_tangent));
+      height_value = t;
+      bend = min(1.18, abs(reed_sway) * 6.0);
+    }
+  } else if (input.part < 4.5) {
     let leaf = u32(input.part + 0.5);
     let t = input.local_position.y;
     let leaf_seed = hash11(instance * 97.0 + f32(leaf) * 13.0 + 5.0);
@@ -319,6 +388,7 @@ fn vs_main(input: VertexIn) -> VertexOut {
   output.blade = vec4f(height_value, variation, understory_value, clamp(bend / 1.18, 0.0, 1.0));
   output.flower = flower_value;
   output.tone = vec2f(color_seed, hue_seed);
+  output.plant_kind = select(0.0, 1.0, reed);
   return output;
 }
 
@@ -330,14 +400,18 @@ fn fs_main(input: VertexOut) -> @location(0) vec4f {
   let wind_load = input.blade.w;
   let color_seed = input.tone.x;
   let hue_seed = input.tone.y;
+  let reed = input.plant_kind > 0.5;
   var albedo = vec3f(0.20, 0.45, 0.10);
 
-  if (input.flower > 0.5) {
+  if (reed) {
+    let reed_base = mix(vec3f(0.095, 0.19, 0.055), vec3f(0.28, 0.43, 0.105), height);
+    let dry_tip = smoothstep(0.68, 1.0, height) * (0.10 + hue_seed * 0.18);
+    albedo = mix(reed_base, vec3f(0.48, 0.42, 0.17), dry_tip);
+    albedo *= 0.86 + color_seed * 0.25;
+  } else if (input.flower > 0.5) {
     let warm = select(vec3f(0.96, 0.55, 0.68), vec3f(0.98, 0.80, 0.28), variation > 0.5);
     albedo = mix(warm, vec3f(0.96, 0.91, 0.74), smoothstep(0.82, 1.0, variation) * 0.34);
   } else if (input.flower < -0.5) {
-    // Mid/far clusters are deliberately lower-frequency and slightly drier than
-    // the garden-edge blades, so the three grass layers remain legible.
     let low = mix(vec3f(0.095, 0.205, 0.045), vec3f(0.17, 0.29, 0.065), hue_seed);
     let high = mix(vec3f(0.31, 0.43, 0.105), vec3f(0.43, 0.49, 0.135), hue_seed);
     albedo = mix(low, high, smoothstep(0.02, 0.92, height)) * (0.84 + color_seed * 0.22);

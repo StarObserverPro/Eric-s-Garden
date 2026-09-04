@@ -13,6 +13,7 @@ import {
   terrainHeightAt,
 } from "../src/render/vgpu/hardscape-geometry";
 import {
+  POND_WATER_Y,
   TERRAIN_MAX_X,
   TERRAIN_MAX_Z,
 } from "../src/render/vgpu/terrain-surface";
@@ -163,7 +164,10 @@ test("hardscape vertices remain finite, bounded and carry all three material fam
   expect(maxNormalLength).toBeLessThan(1.02);
   expect(maxAbsX).toBeGreaterThan(70);
   expect(maxAbsZ).toBeGreaterThan(58);
-  expect(minY).toBeGreaterThan(-0.46);
+  // P1 intentionally adds a real analytic basin, so the old global floor
+  // assertion (-0.46) is no longer valid. Bound the new excavation instead.
+  expect(minY).toBeGreaterThan(-1.05);
+  expect(minY).toBeLessThan(POND_WATER_Y - 0.25);
   expect(maxY).toBeGreaterThan(2.0);
   expect(maxY).toBeLessThan(6.5);
   expect([...kinds].sort()).toEqual([0, 1, 2]);

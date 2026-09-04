@@ -53,6 +53,7 @@ import gardenShader from "./shaders/garden.wgsl";
 import skyShader from "./shaders/sky.wgsl";
 import soilShader from "./shaders/soil.wgsl";
 import vegetationShader from "./shaders/vegetation.wgsl";
+import { createWaterLayer, type WaterLayer } from "./water";
 import { createWateringCanVertices } from "./watering-can-geometry";
 import { advanceWettingVisual, shouldStartWettingVisual } from "./wetting-visual";
 import { worldCameraFor, worldLightingFor } from "./world-frame";
@@ -73,6 +74,7 @@ interface Generation {
   readonly crop: Draw;
   readonly hardscape: HardscapeLayer;
   readonly vegetation: Draw;
+  readonly water: WaterLayer;
   readonly wateringCan: Draw;
   readonly sky: Effect;
   readonly blit: Effect;
@@ -289,6 +291,10 @@ export class VgpuRenderer implements GardenRenderer {
         snapshot.weather.rain,
       ],
     });
+    generation.water.set({
+      ...shared,
+      skyColor: [...snapshot.weather.skyHorizon, 1],
+    });
     const activeWateringPlot = this.#activeWateringPlot;
     const wateringProgress = activeWateringPlot === null
       ? 0
@@ -346,6 +352,7 @@ export class VgpuRenderer implements GardenRenderer {
             generation.cropBundle,
             vegetationBundle,
           );
+          pass.draw(generation.water.draw);
           pass.draw(generation.wateringCan);
         },
       );
@@ -375,9 +382,9 @@ export class VgpuRenderer implements GardenRenderer {
     return {
       kind: this.kind,
       passes: 3,
-      drawCalls: 7,
-      instances: this.#qualityProfile.vegetationInstances + CROP_INSTANCE_COUNT + 3,
-      resources: 16 + this.#generation.vegetationBundles.size,
+      drawCalls: 8,
+      instances: this.#qualityProfile.vegetationInstances + CROP_INSTANCE_COUNT + 4,
+      resources: 18 + this.#generation.vegetationBundles.size,
       dpr: Math.max(1, this.#canvas.width / Math.max(1, this.#canvas.clientWidth)),
     };
   }
@@ -503,6 +510,7 @@ async function createGeneration(
   let vegetationGeometry: Geometry | undefined;
   let wateringCanGeometry: Geometry | undefined;
   let hardscape: HardscapeLayer | undefined;
+  let water: WaterLayer | undefined;
 
   try {
     const soilData = createSoilGeometryData();
@@ -630,6 +638,11 @@ async function createGeneration(
     setWateringCanUniforms(wateringCan, shared, snapshot, null, 0);
     hardscape = await createHardscapeLayer(gpu, sceneTarget, shared);
     const hardscapeLayer = hardscape;
+    water = await createWaterLayer(gpu, sceneTarget, {
+      ...shared,
+      skyColor: [...snapshot.weather.skyHorizon, 1],
+    });
+    const waterLayer = water;
     sky.set({
       viewport: [size[0], size[1], camera.aspect, camera.tanHalfFov],
       skyTop: [...snapshot.weather.skyTop, 1],
@@ -694,6 +707,7 @@ async function createGeneration(
       crop,
       hardscape: hardscapeLayer,
       vegetation,
+      water: waterLayer,
       wateringCan,
       sky,
       blit,
@@ -708,6 +722,7 @@ async function createGeneration(
     bestEffort(() => vegetationGeometry?.destroy());
     bestEffort(() => wateringCanGeometry?.destroy());
     bestEffort(() => hardscape?.destroy());
+    bestEffort(() => water?.destroy());
     bestEffort(() => destroyTarget(sceneTarget));
     throw error;
   }
@@ -873,6 +888,7 @@ function cleanupGeneration(generation: Generation): void {
   bestEffort(() => generation.vegetationGeometry.destroy());
   bestEffort(() => generation.wateringCanGeometry.destroy());
   bestEffort(() => generation.hardscape.destroy());
+  bestEffort(() => generation.water.destroy());
   bestEffort(() => destroyTarget(generation.sceneTarget));
 }
 

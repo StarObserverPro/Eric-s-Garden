@@ -66,13 +66,25 @@ fn road_center_z(x: f32) -> f32 {
   return 0.20 + sin(distance * 0.31) * 0.48 + sin(distance * 0.12 + 0.7) * 0.24;
 }
 
+fn pond_radius(world_xz: vec2f) -> f32 {
+  let delta = (world_xz - vec2f(-10.0, 10.5)) / vec2f(3.6, 2.6);
+  let warped_x = delta.x
+    + sin(delta.y * 2.7 + 0.4) * 0.055
+    + sin((delta.x - delta.y) * 4.1) * 0.025;
+  let warped_z = delta.y + sin(delta.x * 3.1 - 1.1) * 0.045;
+  return length(vec2f(warped_x, warped_z));
+}
+
+fn pond_wet_shore(world_xz: vec2f) -> f32 {
+  let radius = pond_radius(world_xz);
+  return smoothstep(0.66, 0.82, radius) * (1.0 - smoothstep(1.02, 1.20, radius));
+}
+
 fn point_contact(world_xz: vec2f, center: vec2f, radius: f32) -> f32 {
   return 1.0 - smoothstep(radius * 0.45, radius, length(world_xz - center));
 }
 
 fn work_contact(world_xz: vec2f) -> f32 {
-  // Wheel/hay/tree contact is a low-frequency terrain darkening, not a shadow
-  // map. The same coordinates are used by the static geometry placement.
   var mask = 0.0;
   mask = max(mask, point_contact(world_xz, vec2f(8.67, 0.12), 0.62));
   mask = max(mask, point_contact(world_xz, vec2f(8.67, 1.44), 0.62));
@@ -102,9 +114,6 @@ fn fs_main(input: VertexOut) -> @location(0) vec4f {
   let part = input.material_data.z;
   let normal = normalize(input.normal);
 
-  // Remove the two old east-side fence posts and rail fragments from the gate
-  // opening. The base hardscape topology stays reusable; the visible gate leaf
-  // is P0 procedural scenery in the same draw.
   if (kind == 2u && input.world.x > 4.70 && input.world.x < 4.90 && abs(input.world.z) < 1.18) {
     discard;
   }
@@ -139,8 +148,6 @@ fn fs_main(input: VertexOut) -> @location(0) vec4f {
     );
     base = mix(base, shoulder_loam, soil_apron * 0.52);
 
-    // One terrain-owned exit route. It fades in at the east gate, meanders into
-    // the country and carries paired wheel ruts plus a trampled verge.
     let road_center = road_center_z(input.world.x);
     let road_distance = abs(input.world.z - road_center);
     let road_length = smoothstep(4.35, 5.30, input.world.x) * (1.0 - smoothstep(24.0, 29.0, input.world.x));
@@ -154,15 +161,12 @@ fn fs_main(input: VertexOut) -> @location(0) vec4f {
     base = mix(base, vec3f(0.33, 0.255, 0.14), verge_mask * (1.0 - road_mask) * 0.42);
     base *= 1.0 - rut_mask * 0.16;
 
-    // Compact work pad around tractor/trailer plus visible object-ground contact.
     let work_delta = (input.world.xz - vec2f(8.6, 1.45)) / vec2f(3.25, 2.20);
     let work_pad = (1.0 - smoothstep(0.70, 1.05, length(work_delta))) * 0.48;
     base = mix(base, vec3f(0.345, 0.265, 0.155), work_pad);
     let contact = work_contact(input.world.xz);
     base *= 1.0 - contact * 0.16;
 
-    // Fence-foot darkening is interrupted at the east gate, preventing the old
-    // closed rectangle from surviving as a material seam after its rails vanish.
     let north_south = min(abs(input.world.z - 3.55), abs(input.world.z + 3.55));
     let west = abs(input.world.x + 4.80);
     let east = abs(input.world.x - 4.80);
@@ -171,10 +175,18 @@ fn fs_main(input: VertexOut) -> @location(0) vec4f {
     let fence_contact = 1.0 - smoothstep(0.02, 0.16, fence_distance);
     base *= 1.0 - fence_contact * 0.055;
 
-    let dry_thatch = smoothstep(0.86, 0.985, fleck) * (1.0 - earth_mix * 0.76) * (1.0 - road_mask);
+    let shore_wetness = pond_wet_shore(input.world.xz);
+    let wet_mud = mix(
+      vec3f(0.105, 0.090, 0.050),
+      vec3f(0.225, 0.170, 0.085),
+      0.28 + broad * 0.46 + medium * 0.12,
+    );
+    base = mix(base, wet_mud, shore_wetness * 0.86);
+
+    let dry_thatch = smoothstep(0.86, 0.985, fleck) * (1.0 - earth_mix * 0.76) * (1.0 - road_mask) * (1.0 - shore_wetness);
     base += vec3f(0.050, 0.034, 0.009) * dry_thatch;
     let tiny_stone = smoothstep(0.91, 0.99, grain) * max(earth_mix, road_mask * 0.5);
-    base = mix(base, vec3f(0.43, 0.42, 0.35), tiny_stone * 0.15);
+    base = mix(base, vec3f(0.43, 0.42, 0.35), tiny_stone * 0.15 * (1.0 - shore_wetness * 0.6));
     base *= 0.95 + normal.y * 0.05;
   } else if (kind == 1u) {
     let mineral = value_noise(input.world.xz * 4.6 + vec2f(seed * 7.0, seed * -5.0));
@@ -194,7 +206,6 @@ fn fs_main(input: VertexOut) -> @location(0) vec4f {
     base = mix(base, vec3f(0.19, 0.12, 0.065), knot * 0.30);
     if (part > 0.5) { base *= 0.94; }
   } else if (kind == 3u) {
-    // Early seeds are the faded green tractor body; later seeds are exposed steel.
     let worn = value_noise(input.world.xz * 5.2 + vec2f(seed * 19.0, input.world.y * 2.7));
     if (seed < 0.36) {
       base = mix(vec3f(0.16, 0.265, 0.105), vec3f(0.31, 0.39, 0.16), worn * 0.45);
