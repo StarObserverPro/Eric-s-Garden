@@ -15,7 +15,7 @@
   };
   const fail = (condition, message) => { if (!condition) errors.push(message); };
 
-  const verify = async () => {
+  const verify = () => {
     const topLeft = rect(".desktop-top-left");
     const topCenter = rect(".desktop-top-center");
     const topRight = rect(".desktop-top-right");
@@ -95,13 +95,11 @@
       const beforeStyle = getComputedStyle(notebook);
       fail(beforeStyle.position === "fixed" && beforeStyle.pointerEvents === "none", "notebook is not a closed fixed overlay");
       statsButton.click();
-      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
       const openGarden = rect(".garden-stage");
       fail(notebook.classList.contains("is-desktop-open"), "notebook button did not open the desktop overlay");
       fail(!(statsDialog instanceof HTMLDialogElement) || !statsDialog.open, "notebook button leaked through to the statistics dialog");
       if (beforeGarden && openGarden) fail(near(beforeGarden.width, openGarden.width) && near(beforeGarden.height, openGarden.height), "opening notebook resized the renderer surface");
       statsButton.click();
-      await new Promise((resolve) => requestAnimationFrame(resolve));
       fail(!notebook.classList.contains("is-desktop-open"), "notebook button did not close the desktop overlay");
     } else errors.push("notebook overlay controls are missing");
 
@@ -125,7 +123,7 @@
       && document.querySelectorAll(".target-list .target-chip").length >= 2
       && document.querySelectorAll(".status-strip span").length === 3;
     if (ready) {
-      requestAnimationFrame(() => requestAnimationFrame(() => void verify()));
+      verify();
       return;
     }
     if (attempt >= 45) {
