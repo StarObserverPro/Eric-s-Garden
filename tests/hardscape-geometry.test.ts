@@ -120,11 +120,18 @@ test("stepping stones use deterministic constrained random placement rather than
 test("hardscape vertices remain finite, bounded and carry all three material families", () => {
   const { data } = createHardscapeGeometryData();
   const kinds = new Set<number>();
+  let invalidValueCount = 0;
+  let outOfBoundsCount = 0;
+  let minNormalLength = Number.POSITIVE_INFINITY;
+  let maxNormalLength = 0;
   let minY = Number.POSITIVE_INFINITY;
   let maxY = Number.NEGATIVE_INFINITY;
   let maxAbsX = 0;
   let maxAbsZ = 0;
 
+  // Keep the vertex-by-vertex validation, but aggregate failures instead of
+  // constructing hundreds of thousands of Vitest assertions for the expanded
+  // far-terrain carrier.
   for (let offset = 0; offset < data.length; offset += HARDSCAPE_VERTEX_STRIDE_FLOATS) {
     const x = data[offset]!;
     const y = data[offset + 1]!;
@@ -133,14 +140,16 @@ test("hardscape vertices remain finite, bounded and carry all three material fam
     const ny = data[offset + 4]!;
     const nz = data[offset + 5]!;
     const kind = data[offset + 6]!;
-    for (const value of [x, y, z, nx, ny, nz, kind, data[offset + 7]!, data[offset + 8]!]) {
-      expect(Number.isFinite(value)).toBe(true);
+    const values = [x, y, z, nx, ny, nz, kind, data[offset + 7]!, data[offset + 8]!];
+    for (const value of values) {
+      if (!Number.isFinite(value)) invalidValueCount += 1;
     }
-    expect(Math.abs(x)).toBeLessThanOrEqual(TERRAIN_MAX_X + 0.001);
-    expect(Math.abs(z)).toBeLessThanOrEqual(TERRAIN_MAX_Z + 0.001);
+    if (Math.abs(x) > TERRAIN_MAX_X + 0.001 || Math.abs(z) > TERRAIN_MAX_Z + 0.001) {
+      outOfBoundsCount += 1;
+    }
     const normalLength = Math.hypot(nx, ny, nz);
-    expect(normalLength).toBeGreaterThan(0.98);
-    expect(normalLength).toBeLessThan(1.02);
+    minNormalLength = Math.min(minNormalLength, normalLength);
+    maxNormalLength = Math.max(maxNormalLength, normalLength);
     minY = Math.min(minY, y);
     maxY = Math.max(maxY, y);
     maxAbsX = Math.max(maxAbsX, Math.abs(x));
@@ -148,6 +157,10 @@ test("hardscape vertices remain finite, bounded and carry all three material fam
     kinds.add(Math.round(kind));
   }
 
+  expect(invalidValueCount).toBe(0);
+  expect(outOfBoundsCount).toBe(0);
+  expect(minNormalLength).toBeGreaterThan(0.98);
+  expect(maxNormalLength).toBeLessThan(1.02);
   expect(maxAbsX).toBeGreaterThan(70);
   expect(maxAbsZ).toBeGreaterThan(58);
   expect(minY).toBeGreaterThan(-0.46);

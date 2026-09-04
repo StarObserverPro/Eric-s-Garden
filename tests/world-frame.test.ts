@@ -1,13 +1,18 @@
+import { readFileSync } from "node:fs";
 import { expect, test } from "vitest";
 
 import { blankState } from "../src/game/model";
 import { createSceneSnapshot } from "../src/scene/snapshot";
-import skyShader from "../src/render/vgpu/shaders/sky.wgsl";
 import {
   worldCameraFor,
   worldLightingFor,
   worldRayForNdc,
 } from "../src/render/vgpu/world-frame";
+
+const skyShaderSource = readFileSync(
+  new URL("../src/render/vgpu/shaders/sky.wgsl", import.meta.url),
+  "utf8",
+);
 
 test("one world camera contains both geometric ground rays and above-horizon sky rays", () => {
   const snapshot = createSceneSnapshot(blankState());
@@ -42,11 +47,11 @@ test("the visible solar disc and material lighting use one world-space direction
 });
 
 test("the sky pass owns atmosphere only, not a painted ground or hedge", () => {
-  expect(skyShader).not.toContain("horizon_profile");
-  expect(skyShader).not.toContain("far_ground");
-  expect(skyShader).not.toContain("far_hedge");
-  expect(skyShader).toContain("sunDirection");
-  expect(skyShader).toContain("cameraForward");
+  expect(skyShaderSource).not.toContain("horizon_profile");
+  expect(skyShaderSource).not.toContain("far_ground");
+  expect(skyShaderSource).not.toContain("far_hedge");
+  expect(skyShaderSource).toContain("sunDirection");
+  expect(skyShaderSource).toContain("cameraForward");
 });
 
 function dot(a: readonly number[], b: readonly number[]): number {

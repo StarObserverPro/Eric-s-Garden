@@ -87,7 +87,7 @@ test("headless vgpu renders sky and meadow from the shared world frame", async (
 
   const pixels = await output.read();
   let greenPixels = 0;
-  let skyPixels = 0;
+  let coolSkyPixels = 0;
   let warmPixels = 0;
   let minLuma = 255;
   let maxLuma = 0;
@@ -100,12 +100,15 @@ test("headless vgpu renders sky and meadow from the shared world frame", async (
     minLuma = Math.min(minLuma, luma);
     maxLuma = Math.max(maxLuma, luma);
     if (g > r * 1.18 && g > b * 1.08) greenPixels += 1;
-    if (b > r * 1.10 && b > g * 1.04) skyPixels += 1;
+    if (b > r * 1.10 && b > g * 1.04) coolSkyPixels += 1;
     if (r > b * 1.28 && g > b * 1.10) warmPixels += 1;
   }
 
   expect(greenPixels).toBeGreaterThan(1_500);
-  expect(skyPixels).toBeGreaterThan(20_000);
+  // The shared world camera intentionally looks low enough to expose real
+  // distant terrain. Require a visible cool upper-atmosphere cap rather than
+  // the old 20k blue-pixel quota that assumed a separate sky-heavy camera.
+  expect(coolSkyPixels).toBeGreaterThan(WIDTH * HEIGHT * 0.015);
   expect(warmPixels).toBeGreaterThan(2_000);
   expect(maxLuma - minLuma).toBeGreaterThan(55);
 
