@@ -1,0 +1,30 @@
+name: Procedural world diagnostic
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install pinned dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Install portable CPU renderer
+        run: npx vgpu install-software-renderer
+      - name: Prove portable renderer
+        run: npx vgpu doctor --pretty
+      - name: Validate WGSL
+        run: npm run shader:check
+      - name: Run model and render tests
+        run: npm run test
+      - name: Typecheck and build
+        run: npm run build
