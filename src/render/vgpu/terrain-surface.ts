@@ -11,7 +11,24 @@ export const TERRAIN_MAX_X = 72;
 export const TERRAIN_MIN_Z = -60;
 export const TERRAIN_MAX_Z = 60;
 
+// P1 pond authority. The pond sits on the back-left diagonal, away from P0's
+// east-gate road / tractor work corner so both enrichment carriers remain
+// readable without competing for the same silhouette.
+export const POND_CENTER_X = -10.0;
+export const POND_CENTER_Z = 10.5;
+export const POND_RADIUS_X = 3.6;
+export const POND_RADIUS_Z = 2.6;
+export const POND_WATER_RADIUS = 0.90;
+
 const BED_HALF_EXTENT = 0.70;
+const POND_WATERLINE_SAMPLE_RADIUS = 1.18;
+
+/**
+ * A level water datum chosen from the lowest part of the uncarved outer bank.
+ * This keeps every water vertex inside actual terrain instead of letting a
+ * fixed arbitrary Y plane leak through the downhill shore.
+ */
+export const POND_WATER_Y = calculatePondWaterLevel();
 
 /**
  * Analytic height authority shared by the visible low-poly terrain and anything
@@ -19,6 +36,61 @@ const BED_HALF_EXTENT = 0.70;
  * render-target tessellation so density changes cannot reopen height seams.
  */
 export function terrainHeightAt(x: number, z: number): number {
+  const base = terrainBaseHeightAt(x, z);
+  return applyPondBasin(base, x, z);
+}
+
+/** Smooth analytic normal used by the terrain carrier to avoid exposing its
+ * adaptive tessellation as a checkerboard lighting pattern. */
+export function terrainNormalAt(x: number, z: number): TerrainVec3 {
+  const eps = 0.075;
+  const left = terrainHeightAt(x - eps, z);
+  const right = terrainHeightAt(x + eps, z);
+  const down = terrainHeightAt(x, z - eps);
+  const up = terrainHeightAt(x, z + eps);
+  return normalize([left - right, eps * 2, down - up]);
+}
+
+/**
+ * Irregular normalized pond radius. A value near 1 is the outer bank. The two
+ * low-frequency warps prevent the shoreline from becoming a clean ellipse.
+ */
+export function pondRadiusAt(x: number, z: number): number {
+  const dx = (x - POND_CENTER_X) / POND_RADIUS_X;
+  const dz = (z - POND_CENTER_Z) / POND_RADIUS_Z;
+  const warpedX = dx
+    + Math.sin(dz * 2.7 + 0.4) * 0.055
+    + Math.sin((dx - dz) * 4.1) * 0.025;
+  const warpedZ = dz + Math.sin(dx * 3.1 - 1.1) * 0.045;
+  return Math.hypot(warpedX, warpedZ);
+}
+
+/** Renderer-only wet/mud shoreline mask. */
+export function pondWetShoreAt(x: number, z: number): number {
+  const radius = pondRadiusAt(x, z);
+  const fromWater = smoothstep(0.66, 0.82, radius);
+  const toMeadow = 1 - smoothstep(1.02, 1.20, radius);
+  return fromWater * toMeadow;
+}
+
+/** Positive where the terrain lies below the level water surface. */
+export function pondWaterDepthAt(x: number, z: number): number {
+  return Math.max(0, POND_WATER_Y - terrainHeightAt(x, z));
+}
+
+export function nearestBedEdgeDistance(x: number, z: number): number {
+  let closest = Number.POSITIVE_INFINITY;
+  for (let index = 0; index < 12; index += 1) {
+    const centerX = (index % 4 - 1.5) * 1.65;
+    const centerZ = (Math.floor(index / 4) - 1) * 1.75;
+    const dx = Math.max(0, Math.abs(x - centerX) - BED_HALF_EXTENT);
+    const dz = Math.max(0, Math.abs(z - centerZ) - BED_HALF_EXTENT);
+    closest = Math.min(closest, Math.hypot(dx, dz));
+  }
+  return closest;
+}
+
+function terrainBaseHeightAt(x: number, z: number): number {
   const dx = Math.max(0, Math.abs(x) - 3.20);
   const dz = Math.max(0, Math.abs(z) - 2.55);
   const outsideBedField = Math.hypot(dx, dz);
@@ -48,27 +120,30 @@ export function terrainHeightAt(x: number, z: number): number {
   return localSurface + farRise;
 }
 
-/** Smooth analytic normal used by the terrain carrier to avoid exposing its
- * adaptive tessellation as a checkerboard lighting pattern. */
-export function terrainNormalAt(x: number, z: number): TerrainVec3 {
-  const eps = 0.075;
-  const left = terrainHeightAt(x - eps, z);
-  const right = terrainHeightAt(x + eps, z);
-  const down = terrainHeightAt(x, z - eps);
-  const up = terrainHeightAt(x, z + eps);
-  return normalize([left - right, eps * 2, down - up]);
+function applyPondBasin(base: number, x: number, z: number): number {
+  const radius = pondRadiusAt(x, z);
+  if (radius >= 1.28) return base;
+
+  // The bowl profile stays comfortably below water through most of the inner
+  // footprint, then rises through a shallow shelf before meeting the bank.
+  const bowl = smoothstep(0, 0.94, radius);
+  const target = POND_WATER_Y
+    - 0.46 * (1 - bowl)
+    + Math.max(0, radius - 0.72) * 0.15;
+  const carve = 1 - smoothstep(0.90, 1.28, radius);
+  return lerp(base, Math.min(base, target), carve);
 }
 
-export function nearestBedEdgeDistance(x: number, z: number): number {
-  let closest = Number.POSITIVE_INFINITY;
-  for (let index = 0; index < 12; index += 1) {
-    const centerX = (index % 4 - 1.5) * 1.65;
-    const centerZ = (Math.floor(index / 4) - 1) * 1.75;
-    const dx = Math.max(0, Math.abs(x - centerX) - BED_HALF_EXTENT);
-    const dz = Math.max(0, Math.abs(z - centerZ) - BED_HALF_EXTENT);
-    closest = Math.min(closest, Math.hypot(dx, dz));
+function calculatePondWaterLevel(): number {
+  let lowestBank = Number.POSITIVE_INFINITY;
+  const samples = 64;
+  for (let index = 0; index < samples; index += 1) {
+    const angle = index / samples * Math.PI * 2;
+    const x = POND_CENTER_X + Math.cos(angle) * POND_RADIUS_X * POND_WATERLINE_SAMPLE_RADIUS;
+    const z = POND_CENTER_Z + Math.sin(angle) * POND_RADIUS_Z * POND_WATERLINE_SAMPLE_RADIUS;
+    lowestBank = Math.min(lowestBank, terrainBaseHeightAt(x, z));
   }
-  return closest;
+  return lowestBank - 0.045;
 }
 
 function valueNoise2(x: number, z: number): number {
