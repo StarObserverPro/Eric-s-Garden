@@ -1,10 +1,5 @@
 export const VEGETATION_NEAR_TRIANGLES_PER_INSTANCE = 50;
-export const VEGETATION_MID_CLUSTERS_PER_INSTANCE = 2;
-export const VEGETATION_MID_TRIANGLES_PER_CLUSTER = 6;
-export const VEGETATION_MID_TRIANGLES_PER_INSTANCE =
-  VEGETATION_MID_CLUSTERS_PER_INSTANCE * VEGETATION_MID_TRIANGLES_PER_CLUSTER;
-export const VEGETATION_TRIANGLES_PER_INSTANCE =
-  VEGETATION_NEAR_TRIANGLES_PER_INSTANCE + VEGETATION_MID_TRIANGLES_PER_INSTANCE;
+export const VEGETATION_TRIANGLES_PER_INSTANCE = VEGETATION_NEAR_TRIANGLES_PER_INSTANCE;
 
 export function createVegetationVertices(): Float32Array<ArrayBuffer> {
   const output: number[] = [];
@@ -46,25 +41,10 @@ export function createVegetationVertices(): Float32Array<ArrayBuffer> {
     5,
   );
 
-  // P0 keeps the existing detailed tuft and carries two deliberately tiny
-  // mid/far clusters in the same instanced draw. Each cluster is three tapered
-  // crossed cards (six triangles), so the default 1,500 tier yields 3,000
-  // country-grass clusters without a new pass/draw/resource owner.
-  for (let cluster = 0; cluster < VEGETATION_MID_CLUSTERS_PER_INSTANCE; cluster += 1) {
-    for (let blade = 0; blade < 3; blade += 1) {
-      const part = 6 + cluster * 3 + blade;
-      const angle = blade / 3 * Math.PI;
-      const dx = Math.cos(angle) * 0.5;
-      const dz = Math.sin(angle) * 0.5;
-      const baseHalf = 0.42;
-      const topHalf = 0.10;
-      const a = [-dx * baseHalf, 0, -dz * baseHalf] as const;
-      const b = [dx * baseHalf, 0, dz * baseHalf] as const;
-      const c = [dx * topHalf, 1, dz * topHalf] as const;
-      const d = [-dx * topHalf, 1, -dz * topHalf] as const;
-      pushQuad(output, a, b, c, d, [dz, 0, -dx], part);
-    }
-  }
+  // Keep this draw focused on the garden/fence edge. The former P0 mid/far
+  // crossed-card clusters were visually weak countryside fill and cost twelve
+  // extra triangles per instance; the user explicitly retired that distant
+  // grass layer while keeping this detailed near tuft.
   return new Float32Array(output);
 }
 
