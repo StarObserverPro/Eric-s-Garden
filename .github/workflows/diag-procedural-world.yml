@@ -28,8 +28,14 @@ jobs:
         run: npx vitest run tests/vegetation-geometry.test.ts
       - name: Test closed wilderness foliage geometry
         run: npx vitest run tests/wilderness-scenery-geometry.test.ts
-      - name: Test deterministic weather snapshot
-        run: npx vitest run tests/scene-snapshot.test.ts
+      - name: Test scene plot mapping
+        run: npx vitest run tests/scene-snapshot.test.ts -t "maps all twelve plots"
+      - name: Test HUD and renderer weather agreement
+        run: npx vitest run tests/scene-snapshot.test.ts -t "carries gameplay wetness"
+      - name: Test five-weather deterministic shuffle
+        run: npx vitest run tests/scene-snapshot.test.ts -t "deterministic weather shuffle"
+      - name: Test neutral diffuse fill
+        run: npx vitest run tests/scene-snapshot.test.ts -t "adds restrained neutral diffuse radiance"
       - name: Run full model and render tests
         run: npm run test
       - name: Typecheck and build
