@@ -6,32 +6,6 @@ export const VEGETATION_MID_TRIANGLES_PER_INSTANCE =
 export const VEGETATION_TRIANGLES_PER_INSTANCE =
   VEGETATION_NEAR_TRIANGLES_PER_INSTANCE + VEGETATION_MID_TRIANGLES_PER_INSTANCE;
 
-export function createBoxVertices(): Float32Array<ArrayBuffer> {
-  const output: number[] = [];
-  const faces = [
-    [1, 0, 0, 1, -1, -1, 1, 1, -1, 1, 1, 1, 1, -1, 1],
-    [-1, 0, 0, -1, -1, 1, -1, 1, 1, -1, 1, -1, -1, -1, -1],
-    [0, 1, 0, -1, 1, -1, -1, 1, 1, 1, 1, 1, 1, 1, -1],
-    [0, -1, 0, -1, -1, 1, -1, -1, -1, 1, -1, -1, 1, -1, 1],
-    [0, 0, 1, -1, -1, 1, 1, -1, 1, 1, 1, 1, -1, 1, 1],
-    [0, 0, -1, 1, -1, -1, -1, -1, -1, -1, 1, -1, 1, 1, -1],
-  ] as const;
-  for (const face of faces) {
-    for (const offset of [3, 6, 9, 3, 9, 12]) {
-      output.push(
-        face[offset]!,
-        face[offset + 1]!,
-        face[offset + 2]!,
-        face[0],
-        face[1],
-        face[2],
-        0,
-      );
-    }
-  }
-  return new Float32Array(output);
-}
-
 export function createVegetationVertices(): Float32Array<ArrayBuffer> {
   const output: number[] = [];
   const bladeSegments = [5, 5, 5, 5, 3] as const;
