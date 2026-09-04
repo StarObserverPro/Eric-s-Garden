@@ -99,6 +99,7 @@
       fail(notebook.classList.contains("is-desktop-open"), "notebook button did not open the desktop overlay");
       fail(!(statsDialog instanceof HTMLDialogElement) || !statsDialog.open, "notebook button leaked through to the statistics dialog");
       if (beforeGarden && openGarden) fail(near(beforeGarden.width, openGarden.width) && near(beforeGarden.height, openGarden.height), "opening notebook resized the renderer surface");
+      notebook.style.transition = "none";
       statsButton.click();
       fail(!notebook.classList.contains("is-desktop-open"), "notebook button did not close the desktop overlay");
     } else errors.push("notebook overlay controls are missing");
