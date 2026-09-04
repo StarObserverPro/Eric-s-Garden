@@ -23,11 +23,12 @@ Close the two remaining visible R3 defects—tomato canopy readability and lettu
 - Architecture boundary touched: no.
 
 ## Current state
-- Completed: R3 merged in PR #18; timeout-only geometry test repair is on main and Verify green.
-- Current step: port the post-merge tomato/lettuce shader refinement onto fresh main.
-- Next action: run Verify and inspect node/rosette evidence against R3.
-- Blocker: none.
+- Completed: A2–A4; R3 merged in PR #18; the geometry validation timeout was removed by replacing per-float assertion overhead with one complete scan plus summary assertions; R4 run `33829264906` was fully green and its fixed evidence showed the lettuce silhouette improvement.
+- Current step: final tomato canopy pass expands only high-flex compound-leaf carriers from +18% to +30%; shader/model/Node/build and crop evidence steps are green in run `33829584060`.
+- Next action: inspect the final tomato node-detail artifact after the workflow uploads it, then move to review if A1/A5 remain visually satisfied.
+- Blocker: run `33829584060` is currently waiting in the unchanged `Capture the playable Canvas fallback` Chrome screenshot step after all crop checks/evidence completed; do not weaken or bypass that gate.
 
 ## Evidence
-- R3 Verify run `33828605126` is green after the assertion-scan optimization.
-- R4 requires shader validation, `npm run check`, crop node/rosette evidence, WebGPU browser probe, and final Verify.
+- R3 Verify run `33828605126`: fully green after the assertion-scan optimization.
+- R4 Verify run `33829264906`: fully green; fixed node/rosette evidence captured; renderer-architecture WebGPU probe correctly skipped because R4 is crop-shader-only.
+- R4 final-canopy run `33829584060`: shader/model/mock/Node/build, crop visual evidence, botanical detail evidence, and crop-soil contact all green; unchanged Canvas fallback tail still in progress at last check.
