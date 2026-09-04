@@ -13,6 +13,7 @@ import { createSceneSnapshot } from "../src/scene/snapshot";
 const WIDTH = 640;
 const HEIGHT = 420;
 const INSTANCES = 1500;
+const EVIDENCE_CAMERA_ELEVATION = 0.18;
 
 test("headless vgpu renders sky and meadow from the shared world frame", async () => {
   const gpu = await init({ label: "eric-garden-meadow-evidence" });
@@ -40,7 +41,13 @@ test("headless vgpu renders sky and meadow from the shared world frame", async (
   });
   const sky = effect(gpu, skyShader, { label: "meadow-evidence-sky" });
 
-  const snapshot = createSceneSnapshot(blankState());
+  // Evidence intentionally uses a low garden view so one shared perspective
+  // frame contains meadow plus a visible atmosphere cap. Production keeps the
+  // user's current high default view and may orbit all the way down to flat.
+  const snapshot = createSceneSnapshot(blankState(), {
+    zoom: 1,
+    elevation: EVIDENCE_CAMERA_ELEVATION,
+  });
   const camera = worldCameraFor(snapshot, [WIDTH, HEIGHT]);
   const lighting = worldLightingFor(snapshot.weather);
 
@@ -105,9 +112,8 @@ test("headless vgpu renders sky and meadow from the shared world frame", async (
   }
 
   expect(greenPixels).toBeGreaterThan(1_500);
-  // The shared world camera intentionally looks low enough to expose real
-  // distant terrain. Require a visible cool upper-atmosphere cap rather than
-  // the old 20k blue-pixel quota that assumed a separate sky-heavy camera.
+  // Require a visible cool upper-atmosphere cap, not the former 20k blue-pixel
+  // quota that was tied to a separate sky-heavy evidence camera.
   expect(coolSkyPixels).toBeGreaterThan(WIDTH * HEIGHT * 0.015);
   expect(warmPixels).toBeGreaterThan(2_000);
   expect(maxLuma - minLuma).toBeGreaterThan(55);

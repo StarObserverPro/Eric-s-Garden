@@ -14,21 +14,24 @@ const skyShaderSource = readFileSync(
   "utf8",
 );
 
-test("one world camera contains both geometric ground rays and above-horizon sky rays", () => {
-  const snapshot = createSceneSnapshot(blankState());
-  const camera = worldCameraFor(snapshot, [1280, 720]);
+function horizonSnapshot() {
+  return createSceneSnapshot(blankState(), { zoom: 1, elevation: 0 });
+}
+
+test("one world camera spans geometric ground and sky at the flat horizon view", () => {
+  const camera = worldCameraFor(horizonSnapshot(), [1280, 720]);
 
   const top = worldRayForNdc(camera, 0, 1);
   const center = worldRayForNdc(camera, 0, 0);
   const bottom = worldRayForNdc(camera, 0, -1);
 
-  expect(top[1]).toBeGreaterThan(0.10);
-  expect(center[1]).toBeLessThan(-0.05);
-  expect(bottom[1]).toBeLessThan(center[1]);
+  expect(top[1]).toBeGreaterThan(0.20);
+  expect(Math.abs(center[1])).toBeLessThan(0.02);
+  expect(bottom[1]).toBeLessThan(-0.20);
 });
 
 test("the visible solar disc and material lighting use one world-space direction", () => {
-  const snapshot = createSceneSnapshot(blankState());
+  const snapshot = horizonSnapshot();
   const camera = worldCameraFor(snapshot, [1280, 720]);
   const lighting = worldLightingFor(snapshot.weather);
   const sun = lighting.sunDirection;
@@ -40,8 +43,9 @@ test("the visible solar disc and material lighting use one world-space direction
   expect(Math.hypot(...sun)).toBeCloseTo(1, 5);
   expect(sun[1]).toBeGreaterThan(0);
   expect(forward).toBeGreaterThan(0);
-  // Default sunny weather keeps the sun inside the same perspective frustum
-  // that draws the garden rather than placing it with a second sky camera.
+  // The flat view is the explicit horizon-inspection pose added by the camera
+  // controls. It must place the same world sun used by material lighting inside
+  // the same perspective frustum, without inventing a sky-only camera.
   expect(Math.abs(sunNdcX)).toBeLessThan(1);
   expect(Math.abs(sunNdcY)).toBeLessThan(1);
 });
