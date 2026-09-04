@@ -158,13 +158,13 @@ function appendTomato(output: number[]): number {
     // Leaflets start at their actual rachis attachments, not guessed center-minus-half-length positions.
     for (let pair = 0; pair < 3; pair += 1) {
       const base = lerp3(petioleEnd, rachisEnd, 0.28 + pair * 0.25);
-      const leafletLength = 0.135 - pair * 0.012;
+      const leafletLength = 0.160 - pair * 0.014;
       for (const sideSign of [-1, 1] as const) {
         const leafYaw = yaw + sideSign * (0.93 + pair * 0.08);
-        triangles += appendOvalLeaf(output, base, leafYaw, leafletLength, 0.048 - pair * 0.004, 0.20, 10, crop, birth, 0.76, node);
+        triangles += appendOvalLeaf(output, base, leafYaw, leafletLength, 0.061 - pair * 0.005, 0.20 + (leafIndex % 3) * 0.08, 10, crop, birth, 0.76, node);
       }
     }
-    triangles += appendOvalLeaf(output, rachisEnd, yaw, 0.155, 0.050, 0.23, 10, crop, birth, 0.80, node);
+    triangles += appendOvalLeaf(output, rachisEnd, yaw, 0.180, 0.065, 0.26 + (leafIndex % 2) * 0.08, 10, crop, birth, 0.80, node);
   }
   const trusses = [
     { nodeIndex: 2, yaw: -0.55, birth: 0.52, fruits: 2 },
@@ -219,8 +219,9 @@ function appendCorn(output: number[]): number {
     triangles += appendCylinderBetween(output, node, sheathTop, 0.041 - leafIndex * 0.0011, 8, crop, MATERIAL_FOLIAGE, birth, 0.18, node);
     const bladeBase: Vec3 = [sheathTop[0] + Math.cos(yaw) * 0.026, sheathTop[1] - 0.004, sheathTop[2] + Math.sin(yaw) * 0.026];
     const length = (0.50 + (leafIndex % 4) * 0.055) * (1 - Math.max(0, leafIndex - 5) * 0.10);
-    const width = 0.078 + (leafIndex % 3) * 0.009;
-    triangles += appendLeafRibbon(output, bladeBase, yaw, length, width, 0.13 + leafIndex * 0.006, 0.11, 8, crop, MATERIAL_FOLIAGE, birth, 0.72, node);
+    const upper = Math.max(0, leafIndex - 5);
+    const width = (0.078 + (leafIndex % 3) * 0.009) * (1 - upper * 0.09);
+    triangles += appendLeafRibbon(output, bladeBase, yaw, length, width, 0.13 + Math.min(leafIndex, 5) * 0.006 - upper * 0.018, 0.11 - upper * 0.012, 8, crop, MATERIAL_FOLIAGE, birth, 0.72, node);
   }
   // Ear, wrapping husk sheets and silk use one base-to-tip frame, not world-upright ellipsoids.
   const earNode = stalkNodes[6]!;
@@ -230,6 +231,17 @@ function appendCorn(output: number[]): number {
   triangles += appendCylinderBetween(output, earNode, earBase, 0.017, 6, crop, MATERIAL_STEM, earBirth, 0.18, earNode);
   const earStart = output.length;
   triangles += appendEllipsoid(output, [0, 0.185, 0], [0.063, 0.185, 0.063], 12, 7, crop, MATERIAL_HARVEST, earBirth, 0.12, [0, 0, 0]);
+  // Low-cost raised kernels on the exposed upper cob; the core remains a closed body.
+  for (let ring = 4; ring <= 6; ring += 1) {
+    const phi = -Math.PI * 0.5 + ring / 7 * Math.PI;
+    const radial = Math.cos(phi) * 0.063;
+    for (let kernel = 0; kernel < 10; kernel += 1) {
+      const theta = kernel / 10 * Math.PI * 2;
+      const center: Vec3 = [Math.cos(theta) * radial, 0.185 + Math.sin(phi) * 0.185, Math.sin(theta) * radial];
+      const radius = ring === 6 ? 0.0075 : 0.009;
+      triangles += appendEllipsoid(output, center, [radius, 0.011, radius], 4, 3, crop, MATERIAL_HARVEST, earBirth, 0.12, [0, 0, 0]);
+    }
+  }
   for (let sheet = 0; sheet < 3; sheet += 1) triangles += appendCornHusk(output, sheet, crop, earBirth);
   const silkOrigin: Vec3 = [0, 0.368, 0];
   for (let silk = 0; silk < 6; silk += 1) {
@@ -241,12 +253,12 @@ function appendCorn(output: number[]): number {
   }
   transformSurface(output, earStart, earFrame, earNode);
   const tasselBase = stalkNodes[stalkNodes.length - 1]!;
-  const tasselTop: Vec3 = [0, 1.82, 0];
+  const tasselTop: Vec3 = [0, 1.86, 0];
   triangles += appendCylinderBetween(output, tasselBase, tasselTop, 0.006, 5, crop, MATERIAL_BLOSSOM, 0.72, 0.52, tasselBase);
   for (let tassel = 0; tassel < 7; tassel += 1) {
     const yaw = tassel / 7 * Math.PI * 2;
-    const start: Vec3 = [0, 1.70 + (tassel % 2) * 0.025, 0];
-    const end: Vec3 = [Math.cos(yaw) * (0.13 + (tassel % 3) * 0.018), 1.80 - (tassel % 3) * 0.025, Math.sin(yaw) * (0.13 + (tassel % 3) * 0.018)];
+    const start: Vec3 = [0, 1.735 + (tassel % 2) * 0.018, 0];
+    const end: Vec3 = [Math.cos(yaw) * (0.13 + (tassel % 3) * 0.018), 1.845 - (tassel % 3) * 0.015, Math.sin(yaw) * (0.13 + (tassel % 3) * 0.018)];
     triangles += appendCylinderBetween(output, start, end, 0.0038, 5, crop, MATERIAL_BLOSSOM, 0.72, 0.58, tasselBase);
   }
   return triangles;
@@ -332,7 +344,7 @@ function appendStrawberry(output: number[]): number {
       const petioluleLength = leaflet === 0 ? 0.060 : 0.050;
       const leafletBase: Vec3 = [junction[0] + Math.cos(leafYaw) * petioluleLength, junction[1] + 0.005 - Math.abs(leaflet) * 0.003, junction[2] + Math.sin(leafYaw) * petioluleLength];
       triangles += appendCylinderBetween(output, junction, leafletBase, 0.0036, 4, crop, MATERIAL_STEM, birth, 0.70, petioleBase);
-      triangles += appendOvalLeaf(output, leafletBase, leafYaw, 0.108, 0.045, 0.15, 12, crop, birth, 0.74, petioleBase);
+      triangles += appendOvalLeaf(output, leafletBase, leafYaw, 0.108, 0.045, 0.20 + ((leafIndex + leaflet + 3) % 3) * 0.10, 12, crop, birth, 0.74, petioleBase);
     }
   }
   const inflorescences = [
@@ -351,6 +363,17 @@ function appendStrawberry(output: number[]): number {
       const fruitBirth = inflorescence.birth;
       triangles += appendCylinderBetween(output, inflorescence.hub, calyx, 0.0043, 5, crop, MATERIAL_STEM, fruitBirth, 0.52, inflorescence.base);
       triangles += appendEllipsoid(output, center, [radius * 0.88, radius * 1.05, radius * 0.88], 10, 7, crop, MATERIAL_HARVEST, fruitBirth, 0.06, inflorescence.base);
+      // Seeds sit half-embedded at actual berry mesh vertices, so growth never separates them.
+      for (const ring of [3, 5]) {
+        const phi = -Math.PI * 0.5 + ring / 7 * Math.PI;
+        const y = Math.sin(phi);
+        const radial = Math.cos(phi) * radius * 0.88 * (0.68 + 0.32 * (y + 1) * 0.5);
+        for (let seed = 0; seed < 5; seed += 1) {
+          const theta = (seed * 2 + (ring === 5 ? 1 : 0)) / 10 * Math.PI * 2;
+          const seedCenter: Vec3 = [center[0] + Math.cos(theta) * radial, center[1] + y * radius * 1.05, center[2] + Math.sin(theta) * radial];
+          triangles += appendEllipsoid(output, seedCenter, [radius * 0.04, radius * 0.075, radius * 0.04], 4, 2, crop, MATERIAL_BLOSSOM, fruitBirth, 0.06, inflorescence.base);
+        }
+      }
       for (let sepal = 0; sepal < 5; sepal += 1) {
         triangles += appendLeafRibbon(output, calyx, sepal / 5 * Math.PI * 2, radius * 0.46, radius * 0.12, -radius * 0.06, 0, 2, crop, MATERIAL_FOLIAGE, fruitBirth, 0.28, inflorescence.base);
       }
@@ -654,8 +677,10 @@ function appendCornHusk(output: number[], sheet: number, crop: number, birth: nu
   for (let row = 0; row <= along; row += 1) {
     const t = row / along;
     const profile = Math.pow(Math.sin(t * Math.PI), 0.58);
-    const radius = 0.010 + 0.072 * profile + sheet * 0.002;
-    const halfArc = (0.12 + profile * 0.88) * 1.35;
+    const radius = 0.016 + 0.068 * profile + sheet * 0.002;
+    // Keep the basal wrap continuous; taper the pointed opening only near the tip.
+    const tip = Math.max(0, t - 0.70) / 0.30;
+    const halfArc = (1.16 + profile * 0.19) * (1 - tip * tip * 0.88);
     const points: Vec3[] = [];
     for (let column = 0; column <= across; column += 1) {
       const u = column / across * 2 - 1;
