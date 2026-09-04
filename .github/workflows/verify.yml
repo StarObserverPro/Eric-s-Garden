@@ -164,11 +164,12 @@ jobs:
             sleep 0.25
           done
           curl -fsS http://127.0.0.1:4174/ >/dev/null
-          BROWSER="$(command -v google-chrome || command -v chromium || command -v chromium-browser)"
-          test -n "$BROWSER"
 
           if [[ "$DESKTOP_HUD_EVIDENCE_REQUIRED" == "true" ]]; then
             node --check tests/desktop-hud-browser-evidence.js
+            if ! command -v agent-browser >/dev/null 2>&1; then
+              npm install --global agent-browser@0.33.0
+            fi
             cp dist/index.html dist/desktop-hud-evidence.html
             cp tests/desktop-hud-browser-evidence.js dist/desktop-hud-browser-evidence.js
             python3 - <<'PY'
@@ -187,28 +188,36 @@ jobs:
               WIDTH="${VIEWPORT%x*}"
               HEIGHT="${VIEWPORT#*x}"
               SCREENSHOT="browser-evidence/garden-fallback-${VIEWPORT}.png"
-              DOM="browser-evidence/garden-dom-${VIEWPORT}.html"
+              STATUS_FILE="browser-evidence/garden-hud-status-${VIEWPORT}.txt"
+              REPORT_FILE="browser-evidence/garden-hud-report-${VIEWPORT}.json"
+              SESSION="eric-canvas-${GITHUB_RUN_ID}-${WIDTH}-${HEIGHT}"
 
-              "$BROWSER" \
-                --headless=new \
-                --no-sandbox \
-                --disable-gpu \
-                --hide-scrollbars \
-                --force-device-scale-factor=1 \
-                --window-size="${WIDTH},${HEIGHT}" \
-                --virtual-time-budget=5000 \
-                --screenshot="$SCREENSHOT" \
-                --dump-dom \
-                "http://127.0.0.1:4174/desktop-hud-evidence.html?width=${WIDTH}&height=${HEIGHT}" >"$DOM"
+              agent-browser --session "$SESSION" set viewport "$WIDTH" "$HEIGHT" 1
+              agent-browser --session "$SESSION" open \
+                "http://127.0.0.1:4174/desktop-hud-evidence.html?width=${WIDTH}&height=${HEIGHT}"
 
-              test -s "$SCREENSHOT"
-              grep -q "Eric 的秘密菜园" "$DOM"
-              grep -q "本轮只升级土壤、边缘和天气" "$DOM"
-              if ! grep -q 'data-hud-evidence="pass"' "$DOM"; then
+              HUD_STATUS=""
+              for attempt in {1..20}; do
+                HUD_STATUS="$(agent-browser --session "$SESSION" eval 'document.documentElement.dataset.hudEvidence ?? ""')"
+                if grep -Eq 'pass|fail' <<<"$HUD_STATUS"; then
+                  break
+                fi
+                agent-browser --session "$SESSION" wait 250
+              done
+              printf '%s\n' "$HUD_STATUS" | tee "$STATUS_FILE"
+              agent-browser --session "$SESSION" eval \
+                'decodeURIComponent(document.documentElement.dataset.hudEvidenceReport ?? "")' >"$REPORT_FILE" || true
+
+              if ! grep -q 'pass' "$STATUS_FILE"; then
                 echo "Desktop HUD geometry failed at ${VIEWPORT}"
-                grep -o 'data-hud-evidence-report="[^"]*"' "$DOM" || true
+                cat "$REPORT_FILE" || true
+                agent-browser --session "$SESSION" close >/dev/null 2>&1 || true
                 exit 1
               fi
+
+              agent-browser --session "$SESSION" screenshot "$SCREENSHOT"
+              agent-browser --session "$SESSION" close >/dev/null 2>&1 || true
+              test -s "$SCREENSHOT"
 
               python3 - "$SCREENSHOT" "$WIDTH" "$HEIGHT" <<'PY'
           import struct
@@ -226,8 +235,9 @@ jobs:
             done
 
             cp browser-evidence/garden-fallback-1440x900.png browser-evidence/garden-fallback.png
-            cp browser-evidence/garden-dom-1440x900.html browser-evidence/garden-dom.html
           else
+            BROWSER="$(command -v google-chrome || command -v chromium || command -v chromium-browser)"
+            test -n "$BROWSER"
             "$BROWSER" \
               --headless=new \
               --no-sandbox \
