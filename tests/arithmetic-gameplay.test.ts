@@ -134,7 +134,7 @@ describe("P0 real weather and pest subtraction", () => {
   test("rain is applied after a real growth/weather transition, not before its care gate", () => {
     const state = blankState(); plant(state); tendAndGrow(state);
     expect(state.round).toBe(2);
-    expect(countCare(state.plots, MAX_STAGE).watered).toBe(0);
+    expect(countCare(state.plots, MAX_STAGE)).watered).toBe(0);
     const blocked = grow(state);
     expect(blocked.toast).toContain("没浇水");
     expect(state.round).toBe(2);
@@ -151,7 +151,7 @@ describe("P0 real weather and pest subtraction", () => {
     expect(actOnPlot(state, 0).toast).toContain("还剩 2");
     expect(actOnPlot(state, 1).toast).toContain("还剩 1");
     actOnPlot(state, 1);
-    expect(countCare(state.plots, MAX_STAGE)).pests).toBe(1);
+    expect(countCare(state.plots, MAX_STAGE).pests).toBe(1);
     expect(actOnPlot(state, 2).toast).toContain("小虫都走啦");
     expect(state.plots.filter((plot) => plot.crop)).toHaveLength(10);
   });
