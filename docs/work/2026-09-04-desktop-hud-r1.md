@@ -1,8 +1,9 @@
 # Desktop HUD R1
 
 Status: executing
-Base main SHA: 0e7de253d5df1d75c4d1649526c2555540b4959e
-Spec branch: `agent/desktop-hud-spec-r1`
+Base main SHA: 36afd4614afdbf22b997bb1916de308b9e046030
+Spec: `docs/UI_HUD_DESKTOP_R1.md`
+Implementation PR: #22
 
 ## Authority
 - Current explicit user instruction activates construction against `docs/UI_HUD_DESKTOP_R1.md`.
@@ -24,7 +25,7 @@ Replace the permanent three-column desktop page layout with a garden-first HUD o
 - A9 — Rotation/zoom help and `画面与帮助` form the right 39 + 12 + 39 = 90 px stack aligned vertically with the center dock.
 - A10 — Normal desktop UI exposes no raw renderer metrics until the collapsed support surface is opened.
 - A11 — Desktop and portrait adapters are mutually exclusive and restore the same original DOM when leaving their viewport regime.
-- A12 — Repository Verify passes; browser evidence must cover 1906×937, 1440×900, and 1280×800 before claiming visual completion.
+- A12 — Repository Verify passes; browser evidence covers 1906×937, 1440×900, and 1280×800 without page overflow or HUD-region overlap.
 
 ## Non-goals
 - Renderer architecture or performance changes.
@@ -47,11 +48,16 @@ Replace the permanent three-column desktop page layout with a garden-first HUD o
 - 1700+ desktop: exact R1 reference budgets 344 / 596 / 292 and the 932 px center dock.
 - Desktop activation begins at 1240 px landscape; narrower non-portrait layouts fall back to the existing non-desktop structure rather than overlapping HUD islands.
 
-## Current state
-- Completed: specification recovery from PR #21; desktop placement adapter; desktop stylesheet; viewport arbitration with portrait; source-level geometry/ownership tests.
-- Current step: commit the implementation on PR #21 and consume repository Verify.
-- Next action: repair any concrete CI failure, then inspect available browser evidence and update PR readiness honestly.
-- Blocker: browser evidence availability may be limited by the hosted Verify viewport matrix; lack of a requested viewport is an evidence gap, not a code-pass claim.
+## Verification seam
+- Source contract test: `tests/desktop-hud-source.test.ts` checks adapter arbitration, one-state DOM moves, and exact wide-reference CSS arithmetic.
+- Browser matrix helper: `tests/desktop-hud-browser-evidence.js` is injected only into a temporary copied production HTML page during Verify; it is not part of the runtime product entry.
+- Verify keeps the ordinary single Canvas fallback capture for unrelated PRs. When desktop-HUD-owned paths change it instead captures and checks 1906×937, 1440×900, and 1280×800 at DPR 1.
+- Reusable evidence pattern is recorded in `docs/experience/desktop-hud-browser-matrix.md`.
 
-## Experience note
-No new repository capability or external execution chain is introduced here. This construction reuses the existing viewport-adapter pattern established by the portrait HUD, so no separate `docs/experience/` entry is warranted unless verification exposes a new reusable failure mode.
+## Current state
+- Completed: specification merge; desktop placement adapter; desktop stylesheet; viewport arbitration with portrait; source-level geometry/ownership tests.
+- Completed evidence: Verify run #118 on head `982b9fd4e1b54f6d56bb23f5ef047a42daf508d0` passed all shader/model/mock/Node/build checks and the existing 1440×1100 Canvas browser capture.
+- Visual inspection of that hosted screenshot confirms the renderer is viewport-dominant and the new top/left/bottom/right HUD regions are in the intended overlay topology. The CI Linux image lacks Chinese glyph fonts, so Chinese text appears as tofu boxes there; geometry remains inspectable.
+- Sandbox follow-up: the local managed Chromium policy blocks localhost/file navigation, so sandbox-only viewport captures cannot be used as acceptance evidence.
+- Current step: move the three contractual viewport captures and deterministic no-overlap/no-scroll assertions into repository Verify and consume the resulting PR run.
+- Blocker: none.
