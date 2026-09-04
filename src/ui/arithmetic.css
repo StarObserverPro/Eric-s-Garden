@@ -1,0 +1,81 @@
+/* Arithmetic occupies the existing mission/completion surfaces. Art replacements
+   must fit these boxes; no new renderer, assets, fonts or perpetual animation. */
+.order-hud { display: none; }
+.target-chip.order-chip { grid-template-columns: 24px minmax(0, 1fr); grid-template-rows: auto auto auto; gap: 5px 6px; text-align: left; }
+.target-chip.order-chip .emoji { grid-row: 1; line-height: 1; }
+.order-chip .order-counts { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 2px 5px; justify-content: space-between; font-size: 11px; font-variant-numeric: tabular-nums; }
+.order-chip .order-missing { font-weight: 800; color: var(--green-dark); }
+.order-chip[data-complete="true"] { background: rgba(123, 166, 99, .18); }
+.order-slots { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 5px; min-height: 17px; }
+.order-slot { width: 18px; height: 17px; display: grid; place-items: center; border: 1px dashed #8b9988; border-radius: 5px; font-size: 13px; line-height: 1; }
+.order-slot[data-filled="true"] { border-style: solid; border-color: #afc29e; background: #e3ecd8; }
+/* Numeric care feedback must fit the existing three equal-width status cells. */
+body.desktop-hud-active .status-strip span { white-space: normal; font-size: 12px; line-height: 1.35; }
+
+.arithmetic-dialog { max-height: min(92dvh, 900px); }
+.arithmetic-dialog .dialog-shell { max-height: min(92dvh, 900px); padding: 18px; }
+.arithmetic-dialog .celebration-icon { font-size: 28px; }
+.arithmetic-dialog .eyebrow { display: none; }
+.arithmetic-dialog h2 { margin: 4px 0 6px; font-size: 24px; }
+.arithmetic-dialog #completeText { margin: 0; font-size: 13px; }
+.arithmetic-dialog .reward-row { margin: 10px 0; }
+.arithmetic-dialog .level-question { padding: 12px; background: #f1f3e7; }
+.order-receipt { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 12px; }
+.order-receipt-item { white-space: nowrap; font-weight: 800; }
+.order-recap { margin: 7px 0 3px; font-size: 19px; font-weight: 850; font-variant-numeric: tabular-nums; }
+.order-recap-caption { margin: 0; font-size: 12px; color: #59695b; }
+.sharing-action { min-height: 44px; width: 100%; padding: 8px 5px; border: 1px solid #c0ceb2; border-radius: 10px; color: #2f5639; background: #e0ead5; font-weight: 800; font-size: 14px; cursor: pointer; touch-action: manipulation; }
+.sharing-action:disabled { opacity: .5; cursor: default; }
+.sharing-start { margin-top: 12px; }
+.sharing-optional { margin: 7px 0 0; font-size: 12px; color: #59695b; }
+.sharing-title { margin: 16px 0 8px; font-size: 16px; }
+.sharing-pool { padding: 8px; border: 1px dashed #a9b79e; border-radius: 12px; margin: 0 0 10px; background: #fffaf0; }
+.sharing-pool-count { display: block; margin-bottom: 5px; font-size: 13px; }
+.sharing-pool-tokens { display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; min-height: 48px; }
+.sharing-token { display: inline-grid; place-items: center; width: 22px; height: 22px; font-size: 19px; line-height: 1; }
+.sharing-pool-empty, .sharing-empty { align-self: center; color: #6a7667; font-size: 12px; }
+.sharing-baskets { display: grid; grid-template-columns: repeat(var(--basket-count), minmax(0, 1fr)); align-items: start; gap: 8px; }
+.sharing-basket { min-width: 0; border: 1px solid #c6b696; border-radius: 13px; padding: 9px 7px; background: #fcf5e5; }
+.sharing-basket[data-equal="true"] { border-color: #789e61; background: #eaf2dd; }
+.sharing-basket-title { margin: 0 0 4px; font-size: 13px; white-space: nowrap; }
+.sharing-basket-count { display: block; font-size: 21px; }
+.sharing-basket-tokens { display: flex; flex-wrap: wrap; align-content: center; justify-content: center; gap: 3px; height: 102px; overflow-y: auto; padding: 5px 0; }
+.sharing-basket .sharing-take { margin-top: 5px; background: #fffaf0; font-size: 12px; }
+.sharing-result { margin: 10px 0 7px; font-size: 13px; line-height: 1.4; }
+.sharing-success { color: #365b29; }
+.sharing-equation { margin: 4px 0 0; font-size: 16px; font-weight: 850; font-variant-numeric: tabular-nums; }
+.sharing-game > .sharing-action { background: transparent; }
+.arithmetic-dialog #nextLevelBtn { position: sticky; bottom: 0; z-index: 1; box-shadow: 0 0 0 7px #fffaf0; }
+
+@media (max-width: 760px) {
+  .target-list:has(.order-chip) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .target-chip.order-chip { padding: 9px; }
+  .arithmetic-dialog .dialog-shell { padding: 12px; }
+  .arithmetic-dialog .level-question { padding: 10px; }
+  .arithmetic-dialog h2 { font-size: 22px; }
+  .sharing-baskets[data-baskets="4"], .sharing-baskets[data-baskets="6"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .sharing-action { font-size: 13px; }
+}
+@media (max-width: 760px) and (orientation: portrait) {
+  .portrait-hud-active .order-hud { display: block; position: fixed; z-index: 29; top: calc(max(8px, env(safe-area-inset-top)) + 62px); left: var(--hud-left); right: var(--hud-right); padding: 7px 9px; border: 1px solid var(--hud-border); border-radius: 14px; background: rgba(255, 250, 240, .88); backdrop-filter: blur(10px); font-variant-numeric: tabular-nums; }
+  .order-hud-head { display: flex; justify-content: space-between; align-items: center; gap: 6px; font-size: 12px; line-height: 18px; }
+  .order-hud-care { font-size: 11px; white-space: nowrap; }
+  .order-hud-crops { display: flex; gap: 4px; margin-top: 5px; }
+  .order-hud-crop { min-width: 0; flex: 1; display: flex; justify-content: center; align-items: center; gap: 3px; min-height: 29px; border: 1px dashed #a9b59b; border-radius: 7px; background: #fffaf0; }
+  .order-hud-crop[data-complete="true"] { border-style: solid; background: #e4eed8; }
+  .order-hud-icon { font-size: 17px; line-height: 1; }
+  .order-hud-count { font-size: 11px; }
+  .portrait-hud-active .toast { top: calc(max(8px, env(safe-area-inset-top)) + 150px); }
+}
+@media (max-width: 360px) {
+  .order-hud-crop { flex-direction: column; gap: 1px; padding: 2px 0; }
+  .sharing-baskets { gap: 5px; }
+  .sharing-basket { padding: 8px 4px; }
+  .sharing-basket-title { font-size: 12px; }
+  .sharing-token { width: 19px; height: 21px; font-size: 17px; }
+  .sharing-equation { font-size: 14px; }
+}
+
+.sharing-action:focus-visible { outline: 3px solid #527943; outline-offset: 2px; }
+.arithmetic-dialog .dialog-shell { scroll-padding: 12px 0 76px; }
+.arithmetic-dialog .sharing-basket { scroll-margin-bottom: 76px; }
