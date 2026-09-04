@@ -215,11 +215,11 @@ export function weatherIdForState(state: Pick<GameState, "level" | "round">): We
   const level = Math.max(0, Math.min(LEVELS.length - 1, Math.floor(state.level)));
   const round = Math.max(0, Math.min(MAX_STAGE, Math.floor(state.round)));
   let seed = (Math.imul(level + 1, 0x9e3779b1) ^ 0xa511e9b3) >>> 0;
-  seed ^= seed >>> 16;
+  seed = (seed ^ (seed >>> 16)) >>> 0;
   seed = Math.imul(seed, 0x7feb352d) >>> 0;
-  seed ^= seed >>> 15;
+  seed = (seed ^ (seed >>> 15)) >>> 0;
   seed = Math.imul(seed, 0x846ca68b) >>> 0;
-  seed ^= seed >>> 16;
+  seed = (seed ^ (seed >>> 16)) >>> 0;
   const offset = seed % WEATHER_IDS.length;
   const step = WEATHER_STEPS[(seed >>> 8) % WEATHER_STEPS.length]!;
   return WEATHER_IDS[(offset + round * step) % WEATHER_IDS.length]!;
