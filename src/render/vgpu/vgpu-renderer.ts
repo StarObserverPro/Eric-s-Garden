@@ -38,7 +38,7 @@ import {
   cropKindFor,
   cropMarkerHeight,
 } from "./crop-geometry";
-import { createBoxVertices, createVegetationVertices } from "./geometry";
+import { createVegetationVertices } from "./geometry";
 import { createHardscapeLayer, type HardscapeLayer } from "./hardscape";
 import {
   createInstanceTierBundles,
@@ -65,12 +65,10 @@ interface CropMarker {
 interface Generation {
   readonly size: readonly [number, number];
   readonly sceneTarget: Target;
-  readonly boxGeometry: Geometry;
   readonly soilGeometry: Geometry;
   readonly cropGeometry: Geometry;
   readonly vegetationGeometry: Geometry;
   readonly wateringCanGeometry: Geometry;
-  readonly ground: Draw;
   readonly soil: Draw;
   readonly crop: Draw;
   readonly hardscape: HardscapeLayer;
@@ -279,7 +277,6 @@ export class VgpuRenderer implements GardenRenderer {
       wet1: wetness.slice(4, 8),
       wet2: wetness.slice(8, 12),
     };
-    setWorldUniforms(generation.ground, shared, snapshot, 0);
     generation.hardscape.set(shared);
     setVegetationUniforms(generation.vegetation, shared);
     setCropUniforms(generation.crop, shared, snapshot, this.#visualStages);
@@ -378,9 +375,9 @@ export class VgpuRenderer implements GardenRenderer {
     return {
       kind: this.kind,
       passes: 3,
-      drawCalls: 8,
-      instances: this.#qualityProfile.vegetationInstances + CROP_INSTANCE_COUNT + 4,
-      resources: 18 + this.#generation.vegetationBundles.size,
+      drawCalls: 7,
+      instances: this.#qualityProfile.vegetationInstances + CROP_INSTANCE_COUNT + 3,
+      resources: 16 + this.#generation.vegetationBundles.size,
       dpr: Math.max(1, this.#canvas.width / Math.max(1, this.#canvas.clientWidth)),
     };
   }
@@ -501,7 +498,6 @@ async function createGeneration(
     format: "rgba8unorm",
     depth: true,
   });
-  let boxGeometry: Geometry | undefined;
   let soilGeometry: Geometry | undefined;
   let cropGeometry: Geometry | undefined;
   let vegetationGeometry: Geometry | undefined;
@@ -509,20 +505,6 @@ async function createGeneration(
   let hardscape: HardscapeLayer | undefined;
 
   try {
-    boxGeometry = geometry(gpu, {
-      label: "garden-boxes",
-      buffers: [
-        {
-          data: createBoxVertices().buffer,
-          stride: 28,
-          attributes: {
-            local_position: "float32x3",
-            local_normal: "float32x3",
-            part: "float32",
-          },
-        },
-      ],
-    });
     const soilData = createSoilGeometryData();
     soilGeometry = geometry(gpu, {
       label: `garden-soil-${soilData.stats.triangleCount}-triangles`,
@@ -588,13 +570,6 @@ async function createGeneration(
       ],
     });
 
-    const ground = draw(gpu, {
-      shader: gardenShader,
-      geometry: boxGeometry,
-      instances: 1,
-      cull: "back",
-      label: "garden-ground",
-    });
     const soil = draw(gpu, {
       shader: soilShader,
       geometry: soilGeometry,
@@ -646,7 +621,6 @@ async function createGeneration(
       wet1: emptyWet,
       wet2: emptyWet,
     };
-    setWorldUniforms(ground, shared, snapshot, 0);
     setVegetationUniforms(vegetation, shared);
     setCropUniforms(crop, shared, snapshot, snapshot.plots.map((plot) => plot.crop && !plot.harvested ? plot.stage : 0));
     setSoilUniforms(soil, {
@@ -675,7 +649,6 @@ async function createGeneration(
     });
 
     await Promise.all([
-      ground.compile(sceneTarget),
       soil.compile(sceneTarget),
       crop.compile(sceneTarget),
       vegetation.compile(sceneTarget),
@@ -687,10 +660,7 @@ async function createGeneration(
     const staticBundle = bundle(
       gpu,
       { target: sceneTarget, label: "garden-static" },
-      (recorded: BundleRecorder) => {
-        recorded.draw(ground);
-        recorded.draw(hardscapeLayer.draw);
-      },
+      (recorded: BundleRecorder) => recorded.draw(hardscapeLayer.draw),
     );
     const soilBundle = bundle(
       gpu,
@@ -716,12 +686,10 @@ async function createGeneration(
     return {
       size,
       sceneTarget,
-      boxGeometry,
       soilGeometry,
       cropGeometry,
       vegetationGeometry,
       wateringCanGeometry,
-      ground,
       soil,
       crop,
       hardscape: hardscapeLayer,
@@ -735,7 +703,6 @@ async function createGeneration(
       vegetationBundles,
     };
   } catch (error) {
-    bestEffort(() => boxGeometry?.destroy());
     bestEffort(() => soilGeometry?.destroy());
     bestEffort(() => cropGeometry?.destroy());
     bestEffort(() => vegetationGeometry?.destroy());
@@ -744,28 +711,6 @@ async function createGeneration(
     bestEffort(() => destroyTarget(sceneTarget));
     throw error;
   }
-}
-
-function setWorldUniforms(
-  drawable: Draw,
-  shared: SharedWorldUniforms,
-  snapshot: GardenSceneSnapshot,
-  kind: number,
-): void {
-  drawable.set({
-    viewProjection: shared.viewProjection,
-    cameraPosition: shared.cameraPosition,
-    scene: shared.scene,
-    weather: [snapshot.weather.rain, kind, 0, 0],
-    lightDirection: shared.lightDirection,
-    lightColor: shared.lightColor,
-    ambientColor: shared.ambientColor,
-    fogColor: shared.fogColor,
-    lightParams: shared.lightParams,
-    wet0: shared.wet0,
-    wet1: shared.wet1,
-    wet2: shared.wet2,
-  });
 }
 
 function setWateringCanUniforms(
@@ -923,7 +868,6 @@ function value(matrix: ArrayLike<number>, index: number): number {
 }
 
 function cleanupGeneration(generation: Generation): void {
-  bestEffort(() => generation.boxGeometry.destroy());
   bestEffort(() => generation.soilGeometry.destroy());
   bestEffort(() => generation.cropGeometry.destroy());
   bestEffort(() => generation.vegetationGeometry.destroy());
