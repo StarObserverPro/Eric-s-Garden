@@ -3,6 +3,7 @@ import { expect, test } from "vitest";
 import { createWildernessHardscapeGeometryData } from "../src/render/vgpu/wilderness-hardscape-geometry";
 import {
   createWildernessSceneryGeometryData,
+  WILDERNESS_MATERIAL,
   WILDERNESS_VERTEX_STRIDE_FLOATS,
 } from "../src/render/vgpu/wilderness-scenery-geometry";
 import {
@@ -52,6 +53,40 @@ test("P0 scenery uses bounded world geometry and the intended material families"
   expect(minNormalLength).toBeGreaterThan(0.98);
   expect(maxNormalLength).toBeLessThan(1.02);
   expect([...kinds].sort((a, b) => a - b)).toEqual([2, 3, 4, 5, 6]);
+});
+
+test("P0 tree crowns and hedge foliage are watertight after procedural deformation", () => {
+  const { data } = createWildernessSceneryGeometryData();
+  const edgeUse = new Map<string, number>();
+  let foliageTriangles = 0;
+
+  const vertexKey = (offset: number): string => [0, 1, 2]
+    .map((axis) => Math.round(data[offset + axis]! * 100_000))
+    .join(":");
+  const addEdge = (a: string, b: string): void => {
+    const key = a < b ? `${a}|${b}` : `${b}|${a}`;
+    edgeUse.set(key, (edgeUse.get(key) ?? 0) + 1);
+  };
+
+  const triangleStride = WILDERNESS_VERTEX_STRIDE_FLOATS * 3;
+  for (let offset = 0; offset < data.length; offset += triangleStride) {
+    const kind = Math.round(data[offset + 6]!);
+    if (kind !== WILDERNESS_MATERIAL.foliage) continue;
+    foliageTriangles += 1;
+    const a = vertexKey(offset);
+    const b = vertexKey(offset + WILDERNESS_VERTEX_STRIDE_FLOATS);
+    const c = vertexKey(offset + WILDERNESS_VERTEX_STRIDE_FLOATS * 2);
+    expect(a).not.toBe(b);
+    expect(b).not.toBe(c);
+    expect(c).not.toBe(a);
+    addEdge(a, b);
+    addEdge(b, c);
+    addEdge(c, a);
+  }
+
+  expect(foliageTriangles).toBeGreaterThan(3_000);
+  const openOrSplitEdges = [...edgeUse.values()].filter((count) => count !== 2);
+  expect(openOrSplitEdges).toEqual([]);
 });
 
 test("P0 static scenery composes into the existing hardscape draw stream", () => {
