@@ -7,6 +7,7 @@ import {
   type Target,
 } from "vgpu";
 
+import { createPondDressingGeometryData } from "./pond-dressing-geometry";
 import {
   createWildernessHardscapeGeometryData,
   HARDSCAPE_VERTEX_STRIDE_FLOATS,
@@ -36,13 +37,19 @@ export async function createHardscapeLayer(
   target: Target,
   uniforms: HardscapeUniforms,
 ): Promise<HardscapeLayer> {
-  const data = createWildernessHardscapeGeometryData();
+  const wilderness = createWildernessHardscapeGeometryData();
+  const pond = createPondDressingGeometryData();
+  const merged = new Float32Array(wilderness.data.length + pond.data.length);
+  merged.set(wilderness.data, 0);
+  merged.set(pond.data, wilderness.data.length);
+  const triangleCount = wilderness.stats.triangleCount + pond.triangleCount;
+
   let hardscapeGeometry: Geometry | undefined;
   try {
     hardscapeGeometry = geometry(gpu, {
-      label: `garden-hardscape-${data.stats.triangleCount}-triangles`,
+      label: `garden-hardscape-${triangleCount}-triangles`,
       buffers: [{
-        data: data.data.buffer,
+        data: merged.buffer,
         stride: HARDSCAPE_VERTEX_STRIDE_FLOATS * 4,
         attributes: {
           world_position: "float32x3",
@@ -57,14 +64,14 @@ export async function createHardscapeLayer(
       shader: hardscapeShader,
       geometry: hardscapeGeometry,
       cull: "none",
-      label: "garden-hardscape-wilderness-p0",
+      label: "garden-hardscape-wilderness-p0-p1",
     });
     setHardscapeUniforms(hardscape, uniforms);
     await hardscape.compile(target);
 
     return {
       draw: hardscape,
-      triangleCount: data.stats.triangleCount,
+      triangleCount,
       set(values: HardscapeUniforms): void {
         setHardscapeUniforms(hardscape, values);
       },
