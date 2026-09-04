@@ -24,12 +24,15 @@ Repair the wilderness procedural presentation so bushes and tree crowns are clos
 - Architecture boundary touched: no
 
 ## Current state
-- Completed: A1, A2, A3, A4 code + focused regression tests; A5 preserved by diff scope
-- Current step: run repository Verify on the PR head and inspect failures/evidence
-- Next action: repair any shader/test/build regression, then close out evidence
-- Blocker: none
+- Completed: A1–A5 implementation and focused regression coverage.
+- Current step: final clean-head Verify after removal of the temporary diagnostic workflow and addition of the experience note.
+- Next action: review/merge only when explicitly requested.
+- Blocker: none.
 
 ## Evidence
-- Static diff: near vegetation is 50 triangles/instance instead of 62, removing 18,000 triangles at the default 1,500-instance tier.
-- Focused tests added for foliage edge closure, near-only vegetation geometry, deterministic five-weather shuffle, and HUD/snapshot weather agreement.
-- Pending repository `npm run check` and Verify evidence on the PR head.
+- Static budget: near vegetation is 50 triangles/instance instead of 62, removing 18,000 triangles at the default 1,500-instance tier; the retired far-root/mid-cluster WGSL path is removed too.
+- Geometry: focused near-only vegetation test passes; foliage edge census proves every quantized foliage edge is consumed exactly twice, catching the prior face-owned crack mechanism.
+- Weather: focused selector tests prove the same state is stable, rounds 0–4 visit all five existing weather profiles, and HUD label + renderer-neutral snapshot agree. A signed 32-bit XOR bug found during CI was repaired by normalizing each hash stage with `>>> 0`.
+- Diagnostic run `33924040461`: WGSL, focused geometry/weather tests, full Vitest suite, TypeScript and production build all passed.
+- Formal Verify run `33924040473`: `npm run check`, deterministic soil/meadow/hardscape/crop evidence, production crop-soil contact evidence, Canvas fallback and artifact retention all passed. WebGPU browser probe was correctly skipped because renderer architecture was outside this diff.
+- Final clean-head Verify is required after governance cleanup before the PR is considered ready.
