@@ -76,19 +76,38 @@ export function createHardscapeGeometryData(): HardscapeGeometryData {
 }
 
 function appendTerrainSurface(output: number[]): number {
+  // Keep the bed field dense, then increase spacing by orders of magnitude as
+  // distance grows. The distant country is still the same mesh/height owner;
+  // it is not a second scene or a screen-space horizon card.
   const xs = terrainAxis(TERRAIN_MIN_X, [
+    [-36, 8.0],
+    [-18, 4.0],
+    [-8.0, 2.0],
+    [-5.70, 0.80],
     [-4.10, 0.46],
     [-3.25, 0.28],
     [3.25, 0.16],
     [4.10, 0.28],
-    [TERRAIN_MAX_X, 0.46],
+    [5.70, 0.46],
+    [8.0, 0.80],
+    [18, 2.0],
+    [36, 4.0],
+    [TERRAIN_MAX_X, 8.0],
   ]);
   const zs = terrainAxis(TERRAIN_MIN_Z, [
+    [-30, 6.0],
+    [-15, 3.0],
+    [-7.0, 1.60],
+    [-4.30, 0.70],
     [-3.25, 0.46],
     [-2.55, 0.28],
     [2.55, 0.16],
     [3.25, 0.28],
-    [TERRAIN_MAX_Z, 0.46],
+    [4.30, 0.46],
+    [7.0, 0.70],
+    [15, 1.60],
+    [30, 3.0],
+    [TERRAIN_MAX_Z, 6.0],
   ]);
   const vertices: SurfaceVertex[][] = Array.from({ length: zs.length }, () => []);
 
@@ -132,7 +151,7 @@ function terrainVertex(
   const boundary = xIndex === 0 || zIndex === 0 || xIndex === xs.length - 1 || zIndex === zs.length - 1;
   const xSpacing = localSpacing(xs, xIndex);
   const zSpacing = localSpacing(zs, zIndex);
-  const jitterScale = Math.min(xSpacing, zSpacing) * 0.18;
+  const jitterScale = Math.min(Math.min(xSpacing, zSpacing) * 0.18, 0.72);
   const jitterX = boundary ? 0 : (hash2(sourceX * 13.7 + zIndex, sourceZ * 5.9 + xIndex) - 0.5) * jitterScale;
   const jitterZ = boundary ? 0 : (hash2(sourceX * 3.1 - zIndex, sourceZ * 17.3 - xIndex) - 0.5) * jitterScale;
   const x = sourceX + jitterX;

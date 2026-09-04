@@ -19,14 +19,8 @@ import {
   type Surface,
   type Target,
 } from "vgpu";
-import { perspectiveCamera } from "vgpu/scene";
 
 import type { CropId } from "../../game/model";
-import {
-  cameraDollyZoom,
-  cameraVerticalFovDegrees,
-  cameraVerticalPose,
-} from "../../scene/camera-controls";
 import type { GardenSceneSnapshot, Vec3, WeatherProfile } from "../../scene/snapshot";
 import {
   INSTANCE_TIERS,
@@ -61,6 +55,7 @@ import soilShader from "./shaders/soil.wgsl";
 import vegetationShader from "./shaders/vegetation.wgsl";
 import { createWateringCanVertices } from "./watering-can-geometry";
 import { advanceWettingVisual, shouldStartWettingVisual } from "./wetting-visual";
+import { worldCameraFor, worldLightingFor } from "./world-frame";
 
 interface CropMarker {
   readonly root: HTMLSpanElement;
@@ -873,69 +868,22 @@ function setSoilUniforms(
 }
 
 function cameraFor(snapshot: GardenSceneSnapshot, size: readonly [number, number]): CameraState {
-  const orbit = snapshot.camera.angle + Math.PI * 0.25;
-  const dollyZoom = cameraDollyZoom(snapshot.camera.zoom);
-  const distance = 12.6 / dollyZoom;
-  const vertical = cameraVerticalPose(snapshot.camera.zoom, snapshot.camera.elevation);
-  const position: Vec3 = [
-    Math.sin(orbit) * distance,
-    vertical.positionY,
-    Math.cos(orbit) * distance,
-  ];
-  const aspect = size[0] / Math.max(1, size[1]);
-  const fov = cameraVerticalFovDegrees(snapshot.camera.zoom);
-  const camera = perspectiveCamera({
-    fov,
-    aspect,
-    near: 0.1,
-    far: 80,
-    position,
-    target: [0, vertical.targetY, 0],
-  });
-
-  const skyForward = normalize3([
-    -Math.sin(orbit),
-    0.055 * snapshot.camera.elevation,
-    -Math.cos(orbit),
-  ]);
-  const skyRight = normalize3(cross3(skyForward, [0, 1, 0]));
-  const skyUp = normalize3(cross3(skyRight, skyForward));
+  const camera = worldCameraFor(snapshot, size);
   return {
     viewProjection: camera.viewProjection,
-    position,
-    skyForward,
-    skyRight,
-    skyUp,
-    aspect,
-    tanHalfFov: Math.tan((fov * Math.PI) / 360),
+    position: camera.position,
+    // Compatibility field names retained inside this renderer only. These are
+    // no longer a separate sky basis: they are the exact world camera basis.
+    skyForward: camera.forward,
+    skyRight: camera.right,
+    skyUp: camera.up,
+    aspect: camera.aspect,
+    tanHalfFov: camera.tanHalfFov,
   };
 }
 
 function lightingFor(weather: WeatherProfile): LightingState {
-  const horizontalLength = Math.cos(weather.sunElevation);
-  const sunDirection = normalize3([
-    -0.64 * horizontalLength,
-    Math.sin(weather.sunElevation),
-    -0.77 * horizontalLength,
-  ]);
-  return {
-    sunDirection,
-    directIntensity: 0.35 + weather.sunlight * 0.70,
-  };
-}
-
-function normalize3(value: Vec3): Vec3 {
-  const length = Math.hypot(value[0], value[1], value[2]);
-  if (length < 0.000001) return [0, 1, 0];
-  return [value[0] / length, value[1] / length, value[2] / length];
-}
-
-function cross3(a: Vec3, b: Vec3): Vec3 {
-  return [
-    a[1] * b[2] - a[2] * b[1],
-    a[2] * b[0] - a[0] * b[2],
-    a[0] * b[1] - a[1] * b[0],
-  ];
+  return worldLightingFor(weather);
 }
 
 function createCropMarkers(overlay: HTMLElement): CropMarker[] {

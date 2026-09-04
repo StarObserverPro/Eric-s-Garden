@@ -2,10 +2,14 @@ export type TerrainVec3 = readonly [number, number, number];
 
 export const TERRAIN_OUTER_Y = -0.378;
 export const TERRAIN_INNER_Y = -0.205;
-export const TERRAIN_MIN_X = -5.70;
-export const TERRAIN_MAX_X = 5.70;
-export const TERRAIN_MIN_Z = -4.30;
-export const TERRAIN_MAX_Z = 4.30;
+// The playable garden still lives inside roughly +/-6 m, but the same terrain
+// authority continues into a deliberately coarse distant carrier. Its outer
+// boundary sits well beyond the fence so the skyline is produced by geometry,
+// not by the sky pass.
+export const TERRAIN_MIN_X = -72;
+export const TERRAIN_MAX_X = 72;
+export const TERRAIN_MIN_Z = -60;
+export const TERRAIN_MAX_Z = 60;
 
 const BED_HALF_EXTENT = 0.70;
 
@@ -23,9 +27,25 @@ export function terrainHeightAt(x: number, z: number): number {
   const fine = valueNoise2(x * 1.9 + 6.4, z * 1.9 - 3.8) - 0.5;
   const broadAmplitude = lerp(0.036, 0.016, innerInfluence);
   const fineAmplitude = lerp(0.008, 0.012, innerInfluence);
-  return lerp(TERRAIN_OUTER_Y, TERRAIN_INNER_Y, innerInfluence)
+  const localSurface = lerp(TERRAIN_OUTER_Y, TERRAIN_INNER_Y, innerInfluence)
     + broad * broadAmplitude
     + fine * fineAmplitude;
+
+  // Beyond the local garden the same surface becomes broad rolling country.
+  // This starts far outside the fence, so it cannot disturb bed/path contact,
+  // and reaches eye-level ridges only at long distance where mesh density is
+  // intentionally low and atmospheric fog is already strong.
+  const radius = Math.hypot(x, z);
+  const farInfluence = smoothstep(12, 38, radius);
+  const distantBroad = valueNoise2(x * 0.031 + 8.7, z * 0.031 - 4.9) - 0.5;
+  const distantMedium = valueNoise2(x * 0.071 - 12.4, z * 0.071 + 6.2) - 0.5;
+  const farRise = farInfluence * (
+    3.15
+    + distantBroad * 2.20
+    + distantMedium * 1.10
+  );
+
+  return localSurface + farRise;
 }
 
 /** Smooth analytic normal used by the terrain carrier to avoid exposing its

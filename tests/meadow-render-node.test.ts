@@ -2,22 +2,20 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { expect, test } from "vitest";
 import { draw, effect, frame, geometry, init, target, type Frame, type FramePass, type Target } from "vgpu/node";
-import { perspectiveCamera } from "vgpu/scene";
 
+import { blankState } from "../src/game/model";
 import { createVegetationVertices } from "../src/render/vgpu/geometry";
 import skyShader from "../src/render/vgpu/shaders/sky.wgsl";
 import vegetationShader from "../src/render/vgpu/shaders/vegetation.wgsl";
+import { worldCameraFor, worldLightingFor } from "../src/render/vgpu/world-frame";
+import { createSceneSnapshot } from "../src/scene/snapshot";
 
 const WIDTH = 640;
 const HEIGHT = 420;
 const INSTANCES = 1500;
+const EVIDENCE_CAMERA_ELEVATION = 0;
 
-const SKY_FORWARD = [-0.7060397, 0.0549170, -0.7060397] as const;
-const SKY_RIGHT = [0.7071068, 0, -0.7071068] as const;
-const SKY_UP = [0.0388322, 0.9984909, 0.0388322] as const;
-const SUN_DIRECTION = [-0.6796793, 0.2758119, -0.6796793] as const;
-
-test("headless vgpu renders the recovered sky and segmented meadow together", async () => {
+test("headless vgpu renders sky and meadow from the shared world frame", async () => {
   const gpu = await init({ label: "eric-garden-meadow-evidence" });
   const output = target(gpu, { size: [WIDTH, HEIGHT], format: "rgba8unorm", depth: true });
 
@@ -43,16 +41,15 @@ test("headless vgpu renders the recovered sky and segmented meadow together", as
   });
   const sky = effect(gpu, skyShader, { label: "meadow-evidence-sky" });
 
-  const cameraPosition = [8.91, 7.6, 8.91] as const;
-  const camera = perspectiveCamera({
-    fov: 42,
-    aspect: WIDTH / HEIGHT,
-    near: 0.1,
-    far: 80,
-    position: cameraPosition,
-    target: [0, -0.12, 0],
+  // Use the camera control's explicit flat inspection pose. The same perspective
+  // frame must contain foreground meadow, the geometric horizon, and enough
+  // upper atmosphere to prove the sky is not being composed by a second camera.
+  const snapshot = createSceneSnapshot(blankState(), {
+    zoom: 1,
+    elevation: EVIDENCE_CAMERA_ELEVATION,
   });
-  const tanHalfFov = Math.tan((42 * Math.PI) / 360);
+  const camera = worldCameraFor(snapshot, [WIDTH, HEIGHT]);
+  const lighting = worldLightingFor(snapshot.weather);
 
   const skyTop = [0.34, 0.57, 0.78] as const;
   const skyHorizon = [0.88, 0.69, 0.46] as const;
@@ -62,21 +59,21 @@ test("headless vgpu renders the recovered sky and segmented meadow together", as
   const scene = [2.6, 0.52, 0.28, 1.0] as const;
 
   sky.set({
-    viewport: [WIDTH, HEIGHT, WIDTH / HEIGHT, tanHalfFov],
+    viewport: [WIDTH, HEIGHT, camera.aspect, camera.tanHalfFov],
     skyTop: [...skyTop, 1],
     skyHorizon: [...skyHorizon, 1],
     sunColor: [...sunColor, 1],
-    sunDirection: [...SUN_DIRECTION, 0],
-    cameraForward: [...SKY_FORWARD, 0],
-    cameraRight: [...SKY_RIGHT, 0],
-    cameraUp: [...SKY_UP, 0],
+    sunDirection: [...lighting.sunDirection, 0],
+    cameraForward: [...camera.forward, 0],
+    cameraRight: [...camera.right, 0],
+    cameraUp: [...camera.up, 0],
     scene: [scene[0], 0, scene[2], scene[3]],
   });
   vegetation.set({
     viewProjection: camera.viewProjection,
-    cameraPosition: [...cameraPosition, 1],
+    cameraPosition: [...camera.position, 1],
     scene,
-    lightDirection: [...SUN_DIRECTION, 0],
+    lightDirection: [...lighting.sunDirection, 0],
     lightColor: [...sunColor, 1],
     ambientColor: [...ambientColor, 1],
     fogColor: [...fogColor, 1],
@@ -97,7 +94,7 @@ test("headless vgpu renders the recovered sky and segmented meadow together", as
 
   const pixels = await output.read();
   let greenPixels = 0;
-  let skyPixels = 0;
+  let coolSkyPixels = 0;
   let warmPixels = 0;
   let minLuma = 255;
   let maxLuma = 0;
@@ -110,12 +107,14 @@ test("headless vgpu renders the recovered sky and segmented meadow together", as
     minLuma = Math.min(minLuma, luma);
     maxLuma = Math.max(maxLuma, luma);
     if (g > r * 1.18 && g > b * 1.08) greenPixels += 1;
-    if (b > r * 1.10 && b > g * 1.04) skyPixels += 1;
+    if (b > r * 1.10 && b > g * 1.04) coolSkyPixels += 1;
     if (r > b * 1.28 && g > b * 1.10) warmPixels += 1;
   }
 
   expect(greenPixels).toBeGreaterThan(1_500);
-  expect(skyPixels).toBeGreaterThan(20_000);
+  // Require a visible cool upper-atmosphere cap, not the former 20k blue-pixel
+  // quota that was tied to a separate sky-heavy evidence camera.
+  expect(coolSkyPixels).toBeGreaterThan(WIDTH * HEIGHT * 0.015);
   expect(warmPixels).toBeGreaterThan(2_000);
   expect(maxLuma - minLuma).toBeGreaterThan(55);
 
