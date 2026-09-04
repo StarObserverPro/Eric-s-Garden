@@ -11,9 +11,11 @@ For responsive DOM/HUD work with explicit viewport contracts:
 1. Build the production `dist` normally.
 2. Keep the existing Canvas fallback browser capture as the representative browser path; do not add another browser framework dependency just for geometry evidence.
 3. When desktop-HUD-owned paths change, copy `dist/index.html` to a temporary evidence page inside `dist` and inject a **test-only** browser assertion script. Do not ship the assertion script from the product entry point.
-4. Capture each contractual viewport at DPR 1 and assert the PNG dimensions.
-5. In the page, test geometry using `getBoundingClientRect()` and ownership using the real moved DOM nodes. Record pass/fail and a compact report on the temporary evidence document so `--dump-dom` is enough to fail CI with useful context.
-6. Keep the ordinary single fallback capture for unrelated PRs so responsive evidence does not multiply browser cost across every change.
+4. Syntax-check the injected JavaScript before launching the browser. A browser syntax error otherwise looks like a geometry timeout or missing evidence attribute.
+5. Capture each contractual viewport at DPR 1 and assert the PNG dimensions.
+6. In the page, test geometry using `getBoundingClientRect()` and ownership using the real moved DOM nodes. Record pass/fail and a compact report on the temporary evidence document so `--dump-dom` is enough to fail CI with useful context.
+7. Keep the ordinary single fallback capture for unrelated PRs so responsive evidence does not multiply browser cost across every change.
+8. Browser preview servers in adjacent CI steps must not share a best-effort port. Start each preview on an explicit `--strictPort` port and own the whole process group (`setsid` + group kill), otherwise `npx vite preview` can leave a child process behind and the next step may silently bind a different port while its probes still hit the stale server.
 
 ## What the desktop HUD matrix proves
 
