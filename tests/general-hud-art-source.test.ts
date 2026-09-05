@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { expect, test } from "vitest";
 
 const source = readFileSync(new URL("../src/ui/general-hud-art.ts", import.meta.url), "utf8");
@@ -9,10 +9,9 @@ test("General HUD Art R1 keeps all 21 assets at all three sizes", () => {
   expect(source).toContain("const hudArtUrls: Record<HudArtName, string>");
   expect(source).toContain("general-hud-r1/webp/2x/");
   for (const size of ["1x", "2x", "3x"]) {
-    const folder = new URL(size + "/", root);
-    expect(existsSync(folder)).toBe(true);
-    const files = readdirSync(folder).filter((file) => file.endsWith(".webp")).sort();
-    expect(files).toHaveLength(21);
-    expect(files.map((file) => file.replace(new RegExp(`-${size}\\.webp$`), "")).sort()).toEqual([...names].sort());
+    for (const name of names) {
+      const bytes = readFileSync(new URL(`${size}/${name}-${size}.webp`, root));
+      expect(bytes.byteLength).toBeGreaterThan(0);
+    }
   }
 });
