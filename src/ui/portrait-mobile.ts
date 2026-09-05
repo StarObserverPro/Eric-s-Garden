@@ -1,4 +1,5 @@
 import { mountDesktopHud, unmountDesktopHud } from "./desktop-hud";
+import { installGeneralHudArt } from "./general-hud-art";
 import "./portrait-mobile.css";
 
 const portraitPhone = window.matchMedia("(max-width: 760px) and (orientation: portrait)");
@@ -24,6 +25,7 @@ window.addEventListener("keydown", (event) => {
 
 portraitPhone.addEventListener("change", applyResponsiveMode);
 desktopWide.addEventListener("change", applyResponsiveMode);
+installGeneralHudArt();
 applyResponsiveMode();
 
 // Load the existing application only after the active viewport adapter has moved
