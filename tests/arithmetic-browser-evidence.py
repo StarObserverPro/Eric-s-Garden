@@ -28,6 +28,13 @@ def settle(page):
     page.evaluate("() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))")
 
 
+def ready(page):
+    # Portrait diagnostics intentionally live in a closed notebook. Observe the
+    # actual ready attribute, then require the visible active canvas separately.
+    page.locator('#rendererIndicator[data-status="ready"]').wait_for(state="attached", timeout=10000)
+    page.locator('#gardenCanvas2d.is-active').wait_for(state="visible", timeout=10000)
+
+
 def activate(page, selector, touch):
     target = page.locator(selector)
     assert target.count() == 1, f"ambiguous/missing action: {selector}"
@@ -167,7 +174,7 @@ def share(page, touch, name):
     activate(page, '#growBtn', touch)
     assert saved(page)["sharing"] == placement
     page.reload(wait_until="networkidle")
-    page.locator('#rendererIndicator[data-status="ready"]').wait_for(timeout=10000)
+    ready(page)
     activate(page, "#growBtn", touch)
     assert saved(page)["sharing"] == placement and saved(page)["stars"] == original["stars"]
     assert page.locator('.sharing-result[data-equal="true"]').count() == 1, "reload lost sharing arrangement"
@@ -175,7 +182,7 @@ def share(page, touch, name):
     activate(page, '[data-focus-key="put-0"]', touch)
     partial = saved(page)["sharing"]
     page.reload(wait_until="networkidle")
-    page.locator('#rendererIndicator[data-status="ready"]').wait_for(timeout=10000)
+    ready(page)
     activate(page, "#growBtn", touch)
     assert saved(page)["sharing"] == partial
     before_level = saved(page)["level"]
@@ -200,7 +207,7 @@ with sync_playwright() as playwright:
             page.set_default_timeout(10000)
             try:
                 page.goto(URL, wait_until="networkidle")
-                page.locator('#rendererIndicator[data-status="ready"]').wait_for()
+                ready(page)
                 assert "Canvas" in page.locator('#rendererName').inner_text()
                 assert page.locator('#targetList .order-slot').count() == 10
                 screenshot(page, f"{name}-initial")
