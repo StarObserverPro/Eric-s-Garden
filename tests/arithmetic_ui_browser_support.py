@@ -45,7 +45,7 @@ def assert_workspace(page, name, out, answered=False):
     if answered:
         maths=visible_packet(page, '#questionBox .math-equation')
         assert all(x['font']>=26 for x in maths), 'result equation is still small print'
-    art = page.locator('#questionBox svg use').evaluate_all('els=>els.map(e=>({w:e.getBBox().width,h:e.getBBox().height}))')
+    art = page.locator('#questionBox svg:visible use').evaluate_all('els=>els.map(e=>({w:e.getBBox().width,h:e.getBBox().height}))')
     assert art and all(a['w']>0 and a['h']>0 for a in art), 'runtime SVG did not paint'
 
 
