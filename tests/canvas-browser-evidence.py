@@ -114,6 +114,7 @@ def main():
                         assert pick(page,px,py) is None, ("empty gutter stole tap", x,z)
                 assert pick(page,-1,10) is None and pick(page,width+1,10) is None
                 assert pick(page,0,0) is None
+                assert page.evaluate("[NaN,Infinity,-Infinity].every(x=>canvasEvidence.pick(x,10)===null && canvasEvidence.pick(10,x)===null)")
                 draw(page,{"wet":False})
                 dry=page.evaluate("canvasEvidence.fingerprint()")
                 draw(page,{"wet":True})
