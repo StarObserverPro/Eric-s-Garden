@@ -1,0 +1,83 @@
+name: Arithmetic Playability
+
+on:
+  pull_request:
+    paths:
+      - 'src/game/**'
+      - 'src/ui/**'
+      - 'src/main.ts'
+      - 'src/render/canvas2d/**'
+      - 'src/scene/**'
+      - 'index.html'
+      - 'styles.css'
+      - 'package*.json'
+      - 'tests/arithmetic-browser-evidence.py'
+      - '.github/workflows/arithmetic-playability.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/game/**'
+      - 'src/ui/**'
+      - 'src/main.ts'
+      - 'src/render/canvas2d/**'
+      - 'src/scene/**'
+      - 'index.html'
+      - 'styles.css'
+      - 'package*.json'
+      - 'tests/arithmetic-browser-evidence.py'
+      - '.github/workflows/arithmetic-playability.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: arithmetic-playability-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  play:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Build the actual game with pinned dependencies
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+      - name: Install bounded browser driver and Chinese glyph coverage
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y fonts-noto-cjk
+          python3 -m venv /tmp/eric-arithmetic-browser
+          /tmp/eric-arithmetic-browser/bin/pip install playwright==1.57.0
+      - name: Play five levels with mouse and touch
+        timeout-minutes: 5
+        env:
+          ARITHMETIC_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          mkdir -p browser-evidence/arithmetic
+          git rev-parse HEAD > browser-evidence/arithmetic/checked-out.sha
+          setsid npx vite preview --host 127.0.0.1 --port 4175 --strictPort >browser-evidence/arithmetic/preview.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill -- -"$SERVER_PID" 2>/dev/null || true' EXIT
+          for attempt in {1..40}; do
+            if curl -fsS http://127.0.0.1:4175/ >/dev/null; then break; fi
+            sleep 0.25
+          done
+          curl -fsS http://127.0.0.1:4175/ >/dev/null
+          ARITHMETIC_URL=http://127.0.0.1:4175 /tmp/eric-arithmetic-browser/bin/python tests/arithmetic-browser-evidence.py
+      - name: Keep action reports and screenshots even after a failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: arithmetic-playability
+          path: browser-evidence/arithmetic
+          if-no-files-found: warn
+          retention-days: 7

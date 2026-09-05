@@ -6,18 +6,20 @@ import {
   MAX_STAGE,
   actOnPlot,
   advanceLevel,
-  blankState,
+  basketOrder,
   currentLevel,
   grow,
   harvestedCount,
   harvestedTotal,
-  livingPlots,
   loadState,
   plant,
   resetState,
   saveState,
   setTool,
-  totalTarget,
+  startSharing,
+  putInBasket,
+  takeFromBasket,
+  restartSharing,
   type ActionResult,
   type CropId,
   type GameState,
@@ -44,6 +46,8 @@ import {
   maxCanvasCameraZoom,
   type CameraViewState,
 } from "./scene/camera-controls";
+import { countCare } from "./game/arithmetic";
+import { renderOrder, renderArithmeticCompletion, type SharingAction } from "./ui/arithmetic";
 import { createSceneSnapshot } from "./scene/snapshot";
 
 const RENDER_SETTINGS_KEY = "eric-secret-garden-render-r1";
@@ -55,6 +59,7 @@ const element = {
   gpuCanvas: byId<HTMLCanvasElement>("gardenCanvasGpu"),
   cropOverlay: byId<HTMLElement>("cropOverlay"),
   target: byId<HTMLElement>("targetList"),
+  orderHud: byId<HTMLElement>("orderHud"),
   badge: byId<HTMLElement>("levelBadge"),
   weather: byId<HTMLElement>("weatherBadge"),
   progress: byId<HTMLElement>("levelProgress"),
@@ -129,38 +134,40 @@ const runtime = new RenderRuntime({
 
 function update(): void {
   const level = currentLevel(state);
-  const harvested = harvestedTotal(state);
-  const target = totalTarget(state);
+  const order = basketOrder(state);
+  const harvested = order.collected;
+  const target = order.target;
   element.badge.textContent = `第 ${state.level + 1} 关`;
   element.weather.textContent = level.weather;
   element.progress.textContent = `${harvested} / ${target}`;
   element.progressFill.style.width = `${Math.min(100, target > 0 ? harvested / target * 100 : 0)}%`;
   element.title.textContent = level.title;
-  element.hint.textContent = level.hint;
+  element.hint.textContent = order.complete ? "菜都装好了，去看看这一篮吧。" : state.round >= MAX_STAGE ? `还差 ${order.remaining} 棵，看看哪种菜还没装满。` : level.hint;
   element.stars.textContent = `⭐ ${state.stars}`;
 
-  element.target.replaceChildren(
-    ...Object.entries(level.targets).map(([crop, count]) => targetChip(crop as CropId, count ?? 0)),
-  );
-
-  const living = livingPlots(state);
-  const watered = living.filter((plot) => plot.watered).length;
-  const pests = state.plots.filter((plot) => plot.pest && !plot.harvested).length;
-  element.water.textContent = `💧 浇水 ${watered}/${living.length}`;
-  element.spray.textContent = `🛡️ 虫害 ${pests}`;
+  renderOrder(element.target, element.orderHud, state);
+  const care = countCare(state.plots, MAX_STAGE);
+  element.water.textContent = `💧 还需 ${care.remaining} 块`;
+  element.water.setAttribute("aria-label", `已浇 ${care.watered} 块，共 ${care.total} 块，还需 ${care.remaining} 块`);
+  element.spray.textContent = care.pests ? `🐛 还剩 ${care.pests} 块` : "🛡️ 无小虫";
   element.growth.textContent = `🌿 生长 ${state.round}/${MAX_STAGE}`;
 
-  if (!state.planted) {
+  if (order.complete) {
+    element.growIcon.textContent = "🧺";
+    element.growLabel.textContent = "看看菜篮";
+    element.growSubLabel.textContent = "分一分，或者开始下一关";
+  } else if (!state.planted) {
     element.growIcon.textContent = "🌱";
     element.growLabel.textContent = "播种";
     element.growSubLabel.textContent = "按一下开始今天的菜园";
   } else if (state.round < MAX_STAGE) {
     element.growIcon.textContent = "🌿";
-    element.growLabel.textContent = "长大一步";
-    element.growSubLabel.textContent = "先浇水，必要时赶走小虫";
+    element.growLabel.textContent = care.remaining ? "先浇水" : care.pests ? "赶走小虫" : "长大一步";
+    element.growSubLabel.textContent = care.remaining ? `还需 ${care.remaining} 块 · 点菜地浇水`
+      : care.pests ? `还有 ${care.pests} 块 · 点小虫保护它` : "照顾好了，让小苗长高吧";
   } else {
     element.growIcon.textContent = "🧺";
-    element.growLabel.textContent = "成熟啦";
+    element.growLabel.textContent = "收菜";
     element.growSubLabel.textContent = "换成收菜，点成熟蔬菜";
   }
 
@@ -183,6 +190,14 @@ function update(): void {
     button.classList.toggle("active", button.dataset.tool === state.tool);
   });
   runtime.setSnapshot(createSceneSnapshot(state, cameraView));
+  if (element.levelDialog.open) renderArithmeticCompletion(element.levelQuestion, state, shareAction);
+}
+
+function shareAction(action: SharingAction): void {
+  if (action.kind === "start") commit(startSharing(state));
+  else if (action.kind === "restart") commit(restartSharing(state));
+  else if (action.kind === "put") commit(putInBasket(state, action.basket));
+  else if (action.kind === "take") commit(takeFromBasket(state, action.basket));
 }
 
 function commit(result: ActionResult, options: { showComplete?: boolean } = {}): void {
@@ -202,7 +217,7 @@ function showLevelComplete(): void {
     rewardPill("⭐ +3"),
     rewardPill(`🧺 ${harvestedTotal(state)} 棵`),
   );
-  renderQuestion(element.levelQuestion, currentLevel(state).question);
+  renderArithmeticCompletion(element.levelQuestion, state, shareAction);
   element.next.textContent = last ? "看看我的菜园 →" : "下一关 →";
   if (!element.levelDialog.open) element.levelDialog.showModal();
 }
@@ -313,7 +328,10 @@ document.querySelectorAll<HTMLButtonElement>(".tool-btn").forEach((button) => {
     if (tool === "harvest" || tool === "water" || tool === "spray") commit(setTool(state, tool));
   });
 });
-element.grow.addEventListener("click", () => commit(grow(state)));
+element.grow.addEventListener("click", () => {
+  if (state.round >= MAX_STAGE && !basketOrder(state).complete) commit(setTool(state, "harvest"));
+  else commit(grow(state));
+});
 element.statsButton.addEventListener("click", showStats);
 element.speakButton.addEventListener("click", () => {
   if (!("speechSynthesis" in window)) {
@@ -322,7 +340,7 @@ element.speakButton.addEventListener("click", () => {
   }
   window.speechSynthesis.cancel();
   const utterance = new SpeechSynthesisUtterance(
-    `第${state.level + 1}关。${currentLevel(state).title}。${currentLevel(state).hint}`,
+    `第${state.level + 1}关。${element.title.textContent}。${element.hint.textContent}。${element.growLabel.textContent}，${element.growSubLabel.textContent}。`,
   );
   utterance.lang = "zh-CN";
   utterance.rate = 0.88;
@@ -331,6 +349,8 @@ element.speakButton.addEventListener("click", () => {
 element.resetButton.addEventListener("click", () => {
   if (window.confirm("要把 Eric 的秘密菜园重新从第 1 关开始吗？")) {
     state = resetState(localStorage);
+    element.levelDialog.close();
+    element.stats.close();
     update();
     showToast("已经重新开始。");
   }
@@ -542,20 +562,6 @@ function stageSize(): { width: number; height: number } {
     width: Math.max(1, rect.width || element.stage.clientWidth || 1),
     height: Math.max(1, rect.height || element.stage.clientHeight || 1),
   };
-}
-
-function targetChip(crop: CropId, count: number): HTMLElement {
-  const chip = document.createElement("div");
-  chip.className = "target-chip";
-  const emoji = document.createElement("span");
-  emoji.className = "emoji";
-  emoji.textContent = CROPS[crop][1];
-  const name = document.createElement("b");
-  name.textContent = CROPS[crop][0];
-  const progress = document.createElement("small");
-  progress.textContent = `${harvestedCount(state, crop)} / ${count}`;
-  chip.append(emoji, name, progress);
-  return chip;
 }
 
 function logItem(iconText: string, titleText: string, bodyText: string): HTMLElement {

@@ -1,3 +1,5 @@
+import { countCare, countOrder, countSharing, normalizeSharing, sharingBasketCount, type SharingState } from "./arithmetic";
+
 export const SAVE_KEY = "eric-secret-garden-r2";
 export const MAX_STAGE = 4;
 
@@ -137,6 +139,7 @@ export interface GameState {
   log: GardenLogEntry[];
   camera: CameraState;
   completed: boolean;
+  sharing: SharingState | null;
 }
 
 export interface ActionResult {
@@ -170,6 +173,7 @@ export function blankState(): GameState {
     ],
     camera: { angle: -0.08, zoom: 1 },
     completed: false,
+    sharing: null,
   };
 }
 
@@ -177,7 +181,7 @@ export function loadState(storage: StorageLike): GameState {
   try {
     const parsed = JSON.parse(storage.getItem(SAVE_KEY) ?? "{}") as Partial<GameState>;
     const base = blankState();
-    return {
+    const loaded: GameState = {
       ...base,
       ...parsed,
       level: clampInteger(parsed.level, 0, LEVELS.length - 1, base.level),
@@ -194,7 +198,10 @@ export function loadState(storage: StorageLike): GameState {
       },
       planted: Boolean(parsed.planted),
       completed: Boolean(parsed.completed),
+      sharing: null,
     };
+    loaded.sharing = normalizeSharing(parsed.sharing, basketOrder(loaded), loaded.level);
+    return loaded;
   } catch {
     return blankState();
   }
@@ -251,6 +258,7 @@ export function addLog(state: GameState, icon: string, title: string, text: stri
 }
 
 export function plant(state: GameState): ActionResult {
+  if (state.planted || state.completed) return { toast: "种子已经播好了，继续照顾这一篮吧。" };
   const crops: CropId[] = [];
   for (const [crop, count] of Object.entries(currentLevel(state).targets) as [CropId, number][]) {
     for (let index = 0; index < count; index += 1) crops.push(crop);
@@ -265,8 +273,9 @@ export function plant(state: GameState): ActionResult {
   }));
   state.planted = true;
   state.round = 1;
+  state.sharing = null;
   addLog(state, "🌱", "种子播好了", `这一关一共 ${crops.length} 棵。`);
-  return { toast: "种子都播好了！选 💧 浇水，再点菜地。" };
+  return applyWeatherHelp(state) ?? { toast: "种子都播好了！选 💧 浇水，再点菜地。" };
 }
 
 export function setTool(state: GameState, tool: Tool): ActionResult {
@@ -295,37 +304,44 @@ export function actOnPlot(state: GameState, plotIndex: number): ActionResult {
     if (plot.stage >= MAX_STAGE) return { toast: "已经成熟，不用再浇水啦。", toastMs: 1000 };
     if (plot.watered) return { toast: "这块已经浇过水啦。", toastMs: 1000 };
     plot.watered = true;
-    addLog(state, "💧", `给${CROPS[plot.crop][0]}浇水`, "泥土湿润了，小苗可以继续长。");
-    return {};
+    const care = countCare(state.plots, MAX_STAGE);
+    const text = `已浇 ${care.watered} 块，还剩 ${care.remaining} 块。`;
+    addLog(state, "💧", `给${CROPS[plot.crop][0]}浇水`, text);
+    return { toast: `💧 ${text}`, toastMs: 1200 };
   }
 
   if (state.tool === "spray") {
     if (!plot.pest) return { toast: "这里没有小虫。", toastMs: 1000 };
     plot.pest = false;
-    addLog(state, "🛡️", `保护${CROPS[plot.crop][0]}`, "小虫走啦，这一块安全了。");
-    return {};
+    const remaining = countCare(state.plots, MAX_STAGE).pests;
+    const text = remaining ? `又保护了 1 块，还剩 ${remaining} 块有小虫。` : "小虫都走啦，可以继续长大了。";
+    addLog(state, "🛡️", `保护${CROPS[plot.crop][0]}`, text);
+    return { toast: text, toastMs: 1400 };
   }
 
   if (plot.stage < MAX_STAGE) return { toast: "还没成熟，再照顾一下吧。", toastMs: 1000 };
 
+  const wasComplete = basketOrder(state).complete;
   plot.harvested = true;
   const crop = plot.crop;
   state.harvested[crop] = harvestedCount(state, crop) + 1;
   state.totalHarvest[crop] = (Number(state.totalHarvest[crop]) || 0) + 1;
-  addLog(state, "🧺", `摘到${CROPS[crop][0]}`, `篮子里现在有 ${harvestedTotal(state)} 棵菜。`);
-  const finished = harvestedTotal(state) >= totalTarget(state);
+  const order = basketOrder(state);
+  addLog(state, "🧺", `摘到${CROPS[crop][0]}`, `已有 ${order.collected} 棵，还差 ${order.remaining} 棵装满。`);
+  const finished = !wasComplete && order.complete;
   if (finished) {
     state.stars += 3;
-    addLog(state, "⭐", `第 ${state.level + 1} 关完成`, "目标全部收进篮子，得到 3 颗星。");
+    addLog(state, "⭐", `第 ${state.level + 1} 关完成`, `${order.lines.map((line) => line.collected).join(" + ")} = ${order.target}，这一篮装满啦！得到 3 颗星。`);
   }
   return {
-    toast: `${CROPS[crop][1]} 收进篮子！ ${harvestedTotal(state)} / ${totalTarget(state)}`,
+    toast: order.complete ? "🧺 这一篮装满啦！" : `${CROPS[crop][1]} 已有 ${order.collected} / ${order.target}，还差 ${order.remaining} 棵。`,
     toastMs: 900,
     finished,
   };
 }
 
 export function grow(state: GameState): ActionResult {
+  if (basketOrder(state).complete) return { finished: true };
   if (state.completed) return { toast: "秘密菜园 R2 已经全部通关啦！" };
   if (!state.planted) return plant(state);
 
@@ -362,10 +378,11 @@ export function grow(state: GameState): ActionResult {
   } else {
     addLog(state, "🌿", "小苗长高了", `现在是第 ${state.round} / ${MAX_STAGE} 个生长阶段。`);
   }
-  return {};
+  return applyWeatherHelp(state) ?? {};
 }
 
 export function advanceLevel(state: GameState): ActionResult {
+  if (!basketOrder(state).complete) return { toast: `这一篮还差 ${basketOrder(state).remaining} 棵，先去菜地里摘吧。` };
   if (state.level >= LEVELS.length - 1) {
     state.completed = true;
     return { toast: "🌟 全部通关！", toastMs: 2200 };
@@ -375,6 +392,7 @@ export function advanceLevel(state: GameState): ActionResult {
   state.round = 0;
   state.plots = [];
   state.harvested = {};
+  state.sharing = null;
   state.tool = "harvest";
   addLog(state, "🚪", `来到第 ${state.level + 1} 关`, currentLevel(state).hint);
   return {};
@@ -382,6 +400,70 @@ export function advanceLevel(state: GameState): ActionResult {
 
 export function livingPlots(state: GameState): PlotState[] {
   return state.plots.filter((plot) => plot.crop && !plot.harvested && plot.stage < MAX_STAGE);
+}
+
+/** Read-only order projection; counters remain owned by the garden. */
+export function basketOrder(state: GameState) {
+  return countOrder(currentLevel(state).targets, state.harvested);
+}
+
+export function sharingProgress(state: GameState) {
+  return countSharing(basketOrder(state), state.sharing, state.level);
+}
+
+export function startSharing(state: GameState): ActionResult {
+  const order = basketOrder(state);
+  if (!order.complete) return { toast: "先把这一篮摘满，再来分一分。" };
+  if (!sharingBasketCount(order.target, state.level)) return { toast: "这一篮先收好，下一篮再分一分。" };
+  state.sharing ??= { placements: Array<number>(order.target).fill(-1) };
+  return {};
+}
+
+export function putInBasket(state: GameState, basket: number): ActionResult {
+  const before = sharingProgress(state);
+  if (!before.active || !Number.isInteger(basket) || !before.baskets[basket]) return {};
+  const token = before.unassigned[0];
+  if (token === undefined) return { toast: "都放进篮子了。需要调整时，可以拿回 1 棵。" };
+  state.sharing!.placements[token] = basket;
+  const after = sharingProgress(state);
+  if (after.equal) {
+    addLog(state, "🧺", "每篮一样多啦", `${after.tokens.length} ÷ ${after.baskets.length} = ${after.each}；${after.baskets.length} × ${after.each} = ${after.tokens.length}。`);
+    return { toast: `每篮 ${after.each} 棵，一样多啦！`, toastMs: 1800 };
+  }
+  if (after.unassigned.length === 0) return { toast: "每篮还不一样多。拿回 1 棵，再放一放吧。", toastMs: 2200 };
+  return {};
+}
+
+export function takeFromBasket(state: GameState, basket: number): ActionResult {
+  const view = sharingProgress(state);
+  if (!view.active || !Number.isInteger(basket)) return {};
+  const tokens = view.baskets[basket];
+  const token = tokens?.[tokens.length - 1];
+  if (token === undefined) return {};
+  state.sharing!.placements[token] = -1;
+  return {};
+}
+
+export function restartSharing(state: GameState): ActionResult {
+  if (!sharingProgress(state).active) return {};
+  state.sharing!.placements.fill(-1);
+  return { toast: "菜都拿回来了，重新分一分。", toastMs: 1200 };
+}
+
+/** Only a successful sow/grow transition calls this. Reloads, blocked growth,
+ * renderer switches and HUD updates never grant another rainfall allowance. */
+function applyWeatherHelp(state: GameState): ActionResult | undefined {
+  if (weatherIdForState(state) !== "sunshower") return undefined;
+  const growing = livingPlots(state);
+  const dry = growing.filter((plot) => !plot.watered);
+  if (!dry.length) return undefined;
+  const offset = (state.level + state.round) % dry.length;
+  const helped = Array.from({ length: Math.min(4, dry.length) }, (_, index) => dry[(index + offset) % dry.length]!);
+  for (const plot of helped) plot.watered = true;
+  const remaining = countCare(state.plots, MAX_STAGE).remaining;
+  const text = `雨水帮忙浇了 ${helped.length} 块，还剩 ${remaining} 块。`;
+  addLog(state, "🌦️", "雨水帮忙啦", text);
+  return { toast: `🌦️ ${text}`, toastMs: 2400 };
 }
 
 function normalizePlot(value: unknown, index: number): PlotState {
