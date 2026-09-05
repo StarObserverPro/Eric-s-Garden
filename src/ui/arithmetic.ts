@@ -2,7 +2,10 @@ import {
   CROPS, MAX_STAGE, basketOrder, sharingProgress, type GameState,
 } from "../game/model";
 import { countCare, type OrderLine } from "../game/arithmetic";
+import { cropArt, feedbackArt, equation } from "./arithmetic-art";
+import { harvestEquation } from "./arithmetic-learning";
 import "./arithmetic.css";
+import "./arithmetic-learning.css";
 
 export type SharingAction =
   | { kind: "start" | "restart" }
@@ -16,7 +19,9 @@ export function renderOrder(list: HTMLElement, compact: HTMLElement, state: Game
 
   const care = countCare(state.plots, MAX_STAGE);
   const headline = node("div", "order-hud-head");
-  headline.append(node("b", "order-hud-missing", order.complete ? "🧺 这一篮装满啦" : `🧺 还差 ${order.remaining} 棵`));
+  const missing = node("b", "order-hud-missing", order.complete ? "这一篮装满啦" : `还差 ${order.remaining} 棵`);
+  missing.prepend(feedbackArt("basket"));
+  headline.append(missing);
   const status = !state.planted ? "🌱 先播种"
     : care.pests && (state.tool === "spray" || !care.remaining) ? `🐛 还剩 ${care.pests} 块`
       : care.remaining ? `💧 还需 ${care.remaining} 块`
@@ -28,7 +33,9 @@ export function renderOrder(list: HTMLElement, compact: HTMLElement, state: Game
     item.dataset.crop = line.crop;
     item.dataset.complete = String(line.remaining === 0);
     item.setAttribute("aria-label", `${CROPS[line.crop][0]}，已有 ${line.collected}，目标 ${line.target}，还差 ${line.remaining}`);
-    item.append(node("span", "order-hud-icon", CROPS[line.crop][1]), node("b", "order-hud-count", `${line.collected}/${line.target}`));
+    const icon = node("span", "order-hud-icon");
+    icon.append(cropArt(line.crop));
+    item.append(icon, node("b", "order-hud-count", `${line.collected}/${line.target}`));
     crops.append(item);
   }
   compact.replaceChildren(headline, crops);
@@ -38,14 +45,17 @@ function orderChip(line: OrderLine): HTMLElement {
   const chip = node("div", "target-chip order-chip");
   chip.dataset.crop = line.crop;
   chip.dataset.complete = String(line.remaining === 0);
-  chip.append(node("span", "emoji", CROPS[line.crop][1]), node("b", "order-crop-name", CROPS[line.crop][0]));
+  const icon = node("span", "emoji");
+  icon.append(cropArt(line.crop));
+  chip.append(icon, node("b", "order-crop-name", CROPS[line.crop][0]));
   const counts = node("div", "order-counts");
   counts.append(node("span", "order-owned", `已有 ${line.collected}/${line.target}`), node("span", "order-missing", line.remaining ? `还差 ${line.remaining}` : "✓ 满啦"));
   const slots = node("div", "order-slots");
   slots.setAttribute("aria-hidden", "true");
   for (let index = 0; index < line.target; index += 1) {
     const filled = index < line.collected;
-    const slot = node("span", "order-slot", filled ? CROPS[line.crop][1] : "");
+    const slot = node("span", "order-slot");
+    if (filled) slot.append(cropArt(line.crop));
     slot.dataset.filled = String(filled);
     slots.append(slot);
   }
@@ -64,16 +74,22 @@ export function renderArithmeticCompletion(
   guardCompletionGesture(container);
   const previousFocus = document.activeElement instanceof HTMLButtonElement && container.contains(document.activeElement)
     ? document.activeElement.dataset.focusKey : undefined;
+  const wasEqual = container.querySelector('.sharing-result[data-equal="true"]') !== null;
   const content = document.createDocumentFragment();
   const receipt = node("div", "order-receipt");
-  for (const line of order.lines) receipt.append(node("span", "order-receipt-item", `${CROPS[line.crop][1]} ${line.collected}`));
+  for (const line of order.lines) {
+    const item = node("span", "order-receipt-item");
+    item.append(cropArt(line.crop), node("span", "receipt-name", CROPS[line.crop][0]), node("b", "", String(line.collected)));
+    receipt.append(item);
+  }
   content.append(receipt);
-  content.append(node("p", "order-recap", `${order.lines.map((line) => line.collected).join(" + ")} = ${order.target}`));
+  content.append(equation(harvestEquation(state), "order-recap"));
   content.append(node("p", "order-recap-caption", "这一篮装满啦，还差 0 棵。"));
 
   const view = sharingProgress(state);
   if (!view.active) {
-    const start = actionButton("🧺 试试平均分", "start", () => act({ kind: "start" }));
+    const start = actionButton("试试平均分", "start", () => act({ kind: "start" }));
+    start.prepend(feedbackArt("basket"));
     start.classList.add("sharing-start");
     content.append(start, node("p", "sharing-optional", "也可以直接去下一关。"));
   } else {
@@ -98,7 +114,9 @@ export function renderArithmeticCompletion(
       basket.dataset.basket = String(index);
       basket.dataset.equal = String(view.equal);
       basket.setAttribute("aria-label", `第 ${index + 1} 篮，${assigned.length} 棵`);
-      basket.append(node("h4", "sharing-basket-title", `🧺 第 ${index + 1} 篮`));
+      const title = node("h4", "sharing-basket-title", `第 ${index + 1} 篮`);
+      title.prepend(feedbackArt("basket"));
+      basket.append(title);
       basket.append(node("b", "sharing-basket-count", `${assigned.length} 棵`));
       const contents = node("div", "sharing-basket-tokens");
       for (const token of assigned) contents.append(cropToken(view.tokens[token]!, token));
@@ -121,8 +139,21 @@ export function renderArithmeticCompletion(
     result.setAttribute("role", "status");
     result.dataset.equal = String(view.equal);
     if (view.equal) {
-      result.append(node("b", "sharing-success", `✓ 每篮 ${view.each} 棵，一样多啦！`));
-      result.append(node("p", "sharing-equation", `${view.tokens.length} ÷ ${view.baskets.length} = ${view.each}　·　${view.baskets.length} × ${view.each} = ${view.tokens.length}`));
+      result.tabIndex = -1;
+      const success = node("b", "sharing-success", `每篮 ${view.each} 棵，一样多啦！`);
+      success.prepend(feedbackArt("correct"));
+      const references = node("div", "sharing-references");
+      references.setAttribute("aria-label", "刚才分好的每一个篮子");
+      view.baskets.forEach((items, index) => {
+        references.append(node("span", "sharing-reference", `第 ${index + 1} 篮：${items.length} 棵`));
+      });
+      const equations = node("div", "sharing-equation");
+      equations.setAttribute("aria-label", `${view.tokens.length} ÷ ${view.baskets.length} = ${view.each}；${view.baskets.length} × ${view.each} = ${view.tokens.length}`);
+      equations.append(equation([view.tokens.length, "÷", view.baskets.length, "=", view.each]));
+      equations.append(node("p", "math-caption", `${view.tokens.length} 棵 ÷ ${view.baskets.length} 个篮子 = 每篮 ${view.each} 棵`));
+      equations.append(equation([view.baskets.length, "×", view.each, "=", view.tokens.length]));
+      equations.append(node("p", "math-caption", `${view.baskets.length} 个篮子 × 每篮 ${view.each} 棵 = 一共 ${view.tokens.length} 棵`));
+      result.append(success, references, equations);
     } else {
       result.textContent = view.unassigned.length ? "点篮子放 1 棵，多放了可以拿回来。" : "每篮还不一样多。拿回 1 棵，再放一放。";
     }
@@ -130,7 +161,13 @@ export function renderArithmeticCompletion(
     content.append(section);
   }
   container.replaceChildren(content);
-  if (previousFocus) {
+  if (view.equal && !wasEqual) {
+    // Only the completed interaction brings its explanation into view. Never
+    // chase the focused basket on every put/take or hide the real arrangement.
+    const explanation = container.querySelector<HTMLElement>(".sharing-result");
+    explanation?.focus({ preventScroll: true });
+    explanation?.scrollIntoView({ block: "nearest" });
+  } else if (previousFocus) {
     const buttons = [...container.querySelectorAll<HTMLButtonElement>("[data-focus-key]")];
     const same = buttons.find((item) => item.dataset.focusKey === previousFocus && !item.disabled);
     const fallbackKey = previousFocus.startsWith("put-") ? previousFocus.replace("put-", "take-") : "put-0";
@@ -140,7 +177,8 @@ export function renderArithmeticCompletion(
 }
 
 function cropToken(crop: keyof typeof CROPS, token: number): HTMLElement {
-  const item = node("span", "sharing-token", CROPS[crop][1]);
+  const item = node("span", "sharing-token");
+  item.append(cropArt(crop));
   item.dataset.token = String(token);
   item.setAttribute("aria-label", CROPS[crop][0]);
   return item;

@@ -1,0 +1,18 @@
+{
+  "sourceFolder": "https://drive.google.com/drive/folders/1aTr5TTzBJolMV9UrmwNt0p2z-tAY8smX",
+  "sourceArchive": "1A8gUO-oOI9TUcrb-Hrce4lJOtqVZNA85",
+  "authorship": "Project-authored Arithmetic Art R1 supplied by the user; no third-party assets or fonts.",
+  "sourceSha256": {
+    "arithmetic_crop_badges.svg": "7e76c50d0094b98caaed1374a60e1fe8903cb016381878cd240520afa55aa7ad",
+    "arithmetic_feedback_icons.svg": "2050514ce3cfa01cc9d620d5026ac7957bba8c43cee87ef481e8acde1d9f9c18",
+    "arithmetic_number_tiles.svg": "5692eb5aab3779ad5b2bc6773bfda57e9809c4782feca1837f0138ad1cec98d0",
+    "arithmetic_operator_tokens.svg": "17013f87e9f25dab4e48cfe7a669faaea16356d2ee2a2cbbedd87769b6f21583"
+  },
+  "runtimeSha256": "3d0d85c597df018e15b42b6df5aa894c3977fbd5fe326b6e55fe19c5e07fa842",
+  "derivations": [
+    "Remove contact-sheet placement and crop-card backgrounds; retain authored crop paths.",
+    "Crop feedback circles without contact-sheet labels. The droplet is used for watering, not as a hint.",
+    "Correct division to one bar and two centered dots; keep original contact sheet unchanged.",
+    "Use original numeral-card geometry with native text for accessible variable values."
+  ]
+}
