@@ -50,8 +50,10 @@ jobs:
         run: |
           npm ci --no-audit --no-fund
           npm run build
-      - name: Install bounded browser driver
+      - name: Install bounded browser driver and Chinese glyph coverage
         run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y fonts-noto-cjk
           python3 -m venv /tmp/eric-arithmetic-browser
           /tmp/eric-arithmetic-browser/bin/pip install playwright==1.57.0
       - name: Play five levels with mouse and touch
