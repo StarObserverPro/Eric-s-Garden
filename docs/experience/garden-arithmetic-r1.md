@@ -1,48 +1,43 @@
-# Garden arithmetic R1 — implementation and tooling notes
+# Garden arithmetic R1 — implementation and verification notes
 
-Date: 2026-09-04
+Date: 2026-09-04 (America/New_York)
 Baseline main: `a85627a5c99be39adf84b1045cd2a1ce462e54c8`
-Branch: `agent/arithmetic-garden-r1`
-Status: **partial implementation; Draft, not a completed P0/P1 release**.
+Branch / PR: `agent/arithmetic-garden-r1` / #28
+Scope: connected P0 core loop and optional P1 equal sharing; not all of P1/P2.
 
-## What exists in the repository
+## Keep one quantity owner
 
-`src/game/arithmetic.ts` provides read-only order/care projections, exact-division basket selection, harvest-token projection, placement normalization and equal-share detection. `src/game/model.ts` owns all mutations.
+`src/game/arithmetic.ts` provides read-only order/care/harvest-token projections. `src/game/model.ts` owns mutations. Each crop is capped against its own order target: surplus carrots cannot replace tomatoes. Completion stars are awarded only on the incomplete-to-complete transition.
 
-- `basketOrder(state)` caps each crop against its own target. Surplus carrots or unrelated crops cannot substitute for missing tomatoes.
-- Harvest actions report owned/missing amounts and award the existing completion stars only on the incomplete-to-complete transition.
-- Water/spray actions report real remaining beds. Sunshowers water up to four eligible growing beds after successful sow/grow transitions; reloading or repeatedly requesting blocked growth does not grant more rain.
-- `startSharing`, `putInBasket`, `takeFromBasket`, `restartSharing` and `sharingProgress` exist at the model layer. There is **no connected sharing button/UI in this draft**.
-- Saved `sharing.placements` is only an assignment of harvest-token indices to baskets, with `-1` meaning unassigned. Crop identities and totals come from canonical harvested counts. Sharing never subtracts lifetime harvest or awards extra stars.
-- The existing save key stays unchanged. Legacy saves default the additive field to null; invalid placements normalize to unassigned. Next level/reset clear task state.
+Rain operates on up to four eligible growing beds after successful sow/grow transitions. Reloading or requesting blocked growth does not apply it again. Care counts describe actual beds, not nominal task totals.
 
-The 20 arithmetic tests exercise these contracts, including all five levels, repeated actions, malformed placements, unequal-to-equal correction and reload. The original game/snapshot tests provide eight additional focused checks. Their pass does not prove that the missing UI is playable.
+Saved `sharing.placements` assigns canonical harvest-token indices to baskets; `-1` means unassigned. Crop identities/counts are reconstructed from harvested state. Sharing never subtracts lifetime inventory, awards extra stars or becomes a next-level gate. Legacy saves default the additive field to null; malformed placements normalize safely. Next level/reset clear the task.
 
-## Product boundary worth keeping
+The connected UI uses existing mission and completion surfaces. The main button guides care, selects harvest after maturity and reopens the completed basket. Completion displays the actual harvest sum, not an automatic multiple-choice question. Division/multiplication recap appears only after equal groups. Native dialog close preserves already-saved sharing without advancing a level.
 
-Do not call the current automatic `plant()` a spatial multiplication activity. The next row-sowing worklet needs real placement, explicit group membership, reversible correction, clear visible boundaries and renderer-neutral semantic state. Counting automatically arranged plants after the fact is only a recap.
+## Browser findings that source tests did not reveal
 
-The pending UI should use existing mission/completion surfaces, show crop slots and missing quantities during harvesting, and introduce division/multiplication expressions only after equal placement. Sharing is optional; care and next-level progression cannot depend on an arithmetic answer. Keep the old optional statistics quiz separate from this action-first work.
+1. A filtered celebration decoration intercepted the visible return button. Give the control an explicit stacking level and make the decoration non-interactive; verify by real clicking, not by reading `disabled=false`.
+2. Missing CJK fonts produced misleading square-glyph screenshots. Install language coverage in the test environment before judging text wrapping or HUD occlusion. This is a CI dependency, not a shipped font asset.
+3. Once Chinese text rendered, the expanded desktop task card covered a real soil target. Compact duplicated instructions and order-cell spacing; keep the existing camera, picking and 12px sibling gap. Do not move test clicks around the obstruction and call it fixed.
+4. Portrait diagnostics intentionally live inside a closed notebook. Wait for the renderer's ready attribute plus the visible active canvas, not for a hidden diagnostic lamp to become visible.
+5. Keep token areas bounded and restore button focus across DOM projection updates. Put/take/next must remain reachable with touch and scrolling; arithmetic state must not depend on focus or DOM order.
+6. A final-harvest touch ended on the scene, but its trailing click reached the newly opened completion dialog and started sharing without a fresh choice. A completion dialog now accepts pointer clicks only after a press began inside it; keyboard/assistive activation remains available. Reset this boundary on each opening, rather than adding an arbitrary delay or making the test tolerate accidental sharing.
 
-See `../ARITHMETIC_ART_LEDGER_R1.md` for deferred artwork. Missing interaction wiring is not an art debt.
+## Tooling and provenance
 
-## Source and verification chain
+GitHub is authoritative. Local direct GitHub networking failed; authenticated connector reads/writes worked. A previous temporary Actions export supplied pinned source/dependencies for the local workbench. Its export workflow and generated/dependency artifacts are not in the release diff. Compare local `git hash-object` with returned GitHub blob SHAs after text transfers.
 
-1. Local direct GitHub access failed, while authenticated GitHub connector reads/writes worked.
-2. A temporary branch-only Actions workflow, with read-only contents permission and checkout credentials disabled, exported exact source plus pinned npm dependencies. Export run: `33928642791`; export source: `867462375c36bdaea32bb350c17206b4b9eed127`. The artifact is a temporary workbench, not a release.
-3. GitHub remained authoritative. The temporary export workflow was removed before review; dependency archives, generated builds and `WORKBENCH_SOURCE_SHA` do not belong in the final diff.
-4. For text round trips, compare `git hash-object <file>` locally with GitHub's returned blob SHA. A local passing test does not prove a retyped/transferred file is identical. This caught and corrected assertion punctuation introduced while transferring the test file.
-5. Local Chromium could not navigate to the local preview (`ERR_BLOCKED_BY_ADMINISTRATOR`). Browser policy was not changed. No local interactive/visual pass is claimed.
-6. Writing `src/ui/arithmetic.ts` returned `This tool call was blocked by OpenAI because we couldn't determine the safety status of the request.` Normal retries did not succeed. No blocked UI file is presumed committed; normal style/model writes succeeding did not prove the UI write succeeded. The unconnected CSS was removed from the draft rather than leaving a misleading runtime surface.
+Local Chromium returned `ERR_BLOCKED_BY_ADMINISTRATOR` for the preview. Browser policy was not changed and no local browser pass is claimed. The read-only, path-scoped `Arithmetic Playability` workflow builds the production game and runs bounded Playwright mouse/touch journeys on a hosted runner. No debug/game hooks or fabricated gameplay saves are used; the only initialization write chooses the Canvas renderer. Game-save reads are observations of actual input.
 
-A local complete UI workbench compiled, but its `src/main.ts`, `index.html`, UI module/CSS and browser-journey work are not the repository's delivered feature. Resume from actual branch contents, not an earlier progress message. Keep the PR Draft until real UI integration and desktop/touch evidence are present.
+The workflow installs Playwright 1.57.0 in an ephemeral test venv, keeps reports/screenshots on failure, closes its preview process and cancels obsolete same-PR runs. It does not alter existing Verify or production dependencies. Artifacts record both PR head and checked-out merge candidate.
 
-## Verification needed before completing the feature
+## Acceptance and claim boundaries
 
-- Exact-head hosted `Verify` for the committed foundation.
-- Once UI wiring is genuinely committed, a production-build journey through sow, water, pest removal, harvest, order shortfall and optional sharing with real mouse/touch input.
-- At least desktop 1440×900, portrait 390×844 and narrow portrait 320×568, including 2/3/4 baskets and six-crop order counters.
-- Deliberate uneven placement, take-back correction, partial/equal reload, reset and next-level skipping without losing inventory or stars.
-- Inspect actual screenshots for clipping/occlusion. Canvas fallback evidence is not WebGPU visual or target-device performance evidence.
+The focused 20 arithmetic tests cover order identity, real care, idempotence, sharing conservation, malformed/legacy saves and all five levels. The browser journey exercises all five levels at desktop 1440x900 and emulated touch 390x844/320x568: rain, pests, harvesting, one-missing states, six crops, 2/3/4 baskets, uneven correction, optional skipping, close/reopen, partial/equal reload and reset.
 
-No merge, auto-merge or production deployment was authorized or performed.
+Exact final-head results and run links are on PR #28. Source tests, screenshots and action traces prove different things. Complete journeys use Canvas fallback; existing Verify separately checks WebGPU startup/presentation. Neither is physical-phone or target-GPU performance evidence.
+
+Automatic `plant()` is not spatial multiplication. A future row-sowing worklet needs real placement, reversible correction, explicit group membership and renderer-neutral visible boundaries. Missing row sowing is functional scope, not an artwork debt. Artwork replacements are tracked in `../ARITHMETIC_ART_LEDGER_R1.md`.
+
+No merge, auto-merge or production deployment is included.

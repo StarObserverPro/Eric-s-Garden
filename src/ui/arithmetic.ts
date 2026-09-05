@@ -61,6 +61,7 @@ export function renderArithmeticCompletion(
 ): void {
   const order = basketOrder(state);
   if (!order.complete) { container.replaceChildren(); return; }
+  guardCompletionGesture(container);
   const previousFocus = document.activeElement instanceof HTMLButtonElement && container.contains(document.activeElement)
     ? document.activeElement.dataset.focusKey : undefined;
   const content = document.createDocumentFragment();
@@ -158,4 +159,27 @@ function node<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, 
   element.className = className;
   if (text !== undefined) element.textContent = text;
   return element;
+}
+
+// Scene actions finish on pointerup. A newly opened dialog must not consume
+// the trailing click from that same gesture (especially on touch screens).
+const completionPresses = new WeakMap<HTMLDialogElement, { beganInside: boolean }>();
+function guardCompletionGesture(container: HTMLElement): void {
+  const dialog = container.closest("dialog");
+  if (!dialog) return;
+  let press = completionPresses.get(dialog);
+  if (!press) {
+    const boundary = { beganInside: false };
+    completionPresses.set(dialog, boundary);
+    press = boundary;
+    dialog.addEventListener("pointerdown", () => { boundary.beganInside = true; }, { capture: true });
+    dialog.addEventListener("click", (event) => {
+      // detail=0 includes keyboard and assistive activation, not pointer clicks.
+      if (event.detail > 0 && !boundary.beganInside) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      }
+    }, { capture: true });
+  }
+  if (!dialog.open) press.beganInside = false;
 }
