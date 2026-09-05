@@ -85,3 +85,18 @@ body.desktop-hud-active .status-strip span { white-space: normal; font-size: 12p
 .arithmetic-close:focus-visible { outline: 3px solid #527943; }
 
 .arithmetic-dialog .celebration-icon { pointer-events: none; }
+
+/* Keep the live order inside the existing left rail without covering the beds.
+   Long stage instructions are already available through the main action/voice. */
+@media (min-width: 1240px) and (orientation: landscape) {
+  body.desktop-hud-active .mission-card:has(.order-chip) .mission-label,
+  body.desktop-hud-active .mission-card:has(.order-chip) .mission-hint { display: none; }
+  body.desktop-hud-active .mission-card:has(.order-chip) h2 { font-size: 20px; line-height: 1.2; margin-bottom: 10px; }
+  body.desktop-hud-active .target-chip.order-chip { padding: 6px 9px; gap: 3px 6px; }
+  body.desktop-hud-active .target-chip.order-chip .emoji { font-size: 20px; }
+  body.desktop-hud-active .order-chip .order-counts { line-height: 1.2; }
+  body.desktop-hud-active .order-slots { min-height: 15px; }
+  body.desktop-hud-active .order-slot { height: 15px; font-size: 12px; }
+  body.desktop-hud-active .mission-card:has(.order-chip) .status-strip { margin-top: 10px; }
+  body.desktop-hud-active .mission-card:has(.order-chip) .status-strip span { padding: 7px 3px; }
+}
