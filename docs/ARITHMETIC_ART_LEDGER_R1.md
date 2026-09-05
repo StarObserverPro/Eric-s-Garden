@@ -1,140 +1,30 @@
-# Eric's Garden — Arithmetic Art Ledger R1
+# Arithmetic art ledger R1
 
-**Status:** art direction approved for the first arithmetic asset pack; SVG pack ready for review; runtime integration intentionally separate.
+Date: 2026-09-04 (America/New_York)
+Owner: Eric's Garden arithmetic gameplay, PR #28
+Status: gameplay UI connected; art source delivered in #29; runtime art integration belongs to #30.
+Source: user-activated GARDEN_ARITHMETIC_GAMEPLAY_PLAN_R1.md.
 
-**Scope:** the arithmetic/counting presentation layer for Eric's Garden. This ledger covers operator tokens, number tiles, crop counting badges, feedback icons, and the visual rules that keep them inside the existing garden identity.
+The complete #29 style, palette, shape grammar, asset inventory and external handoff are preserved in [Arithmetic Art Direction R1](ARITHMETIC_ART_DIRECTION_R1.md). This ledger retains the #28 gameplay-slot contracts. Both PRs originally added this path independently; neither account is discarded by integration.
 
-## 1. Why this style
+Order slots, the portrait quantity strip, harvest recap and optional sharing controls are now in the repository. The #28 crop emoji and bounded CSS cards are working placeholders, not final art. Genuine row sowing remains separate functional work; it is not covered by this cosmetic ledger.
 
-Eric's Garden already has a warm paper surface, dark green ink, soil brown, soft meadow green, and a gold reward accent. Arithmetic should feel like a small set of garden tools that Eric can pick up and arrange, not like a detached worksheet or a generic education app.
+## Asset account
 
-The art direction is therefore:
-
-> **Garden schoolbook / painted low-poly tokens** — large, tactile vector shapes with paper-card faces, simple wooden sign colors, and a restrained dark-green outline.
-
-The pack is 2.5D rather than photorealistic. A quiet offset shadow gives the pieces physical presence, while the silhouette and color remain clear at small sizes and in the Canvas fallback.
-
-## 2. Existing visual authority
-
-The pack follows the current repository baseline rather than inventing a new theme:
-
-| Existing authority | Arithmetic treatment |
-| --- | --- |
-| `--paper: #f7f2df` / `--paper-2: #fffaf0` | card and tile faces |
-| `--ink: #26352c` | primary outline and numerals |
-| `--green: #4f7a54` / `--green-dark: #2f5639` | correct state, leaves, plus/equal signs |
-| `--green-soft: #dfe9d2` | calm backgrounds and selected tiles |
-| `--soil: #8f6546` | wooden/earth accents and retry state |
-| `--gold: #d8a43b` | reward, hint emphasis, and multiplication token |
-| warm sky / water accents | optional hint and water feedback only |
-
-No new primary brand color is introduced in R1. Crop badges use the existing six-crop visual vocabulary: carrot orange, tomato/strawberry red, corn yellow, pumpkin orange, and lettuce green.
-
-## 3. Shape grammar
-
-### 3.1 Shared rules — HARD
-
-- Use a stable `4–5px` source outline at the supplied preview size, with rounded joins and caps.
-- Keep the main silhouette understandable without text or color. The symbol must still read in monochrome.
-- Use one quiet down/right shadow, never a floating neon glow or a heavy 3D bevel.
-- Keep symbols optically centered, not mathematically forced into the box.
-- Keep the usable shape inside an approximately `12%` safe margin so hover/selected states do not clip.
-- Do not use emoji glyphs as the production icon source.
-
-### 3.2 Operator tokens
-
-Operators are small garden signboards / seed packets. Each token has a rounded square body, a contrasting symbol, and a tiny material cue near the bottom edge. The cue is decorative and must not carry meaning by itself.
-
-- `+` — meadow green: adding plants together.
-- `−` — straw gold: taking plants away.
-- `×` — pale wood: groups / repeated rows.
-- `÷` — light timber: sharing into equal groups.
-- `=` — sky green: the result / balance point.
-
-The operator symbol is the only required semantic layer. Do not replace it with a word on the token.
-
-### 3.3 Number tiles
-
-Number tiles are cream paper cards with a single large dark-green numeral. A small colored dot gives the row a hand-sorted, garden-workbench feel, but numbers remain identical in contrast and weight. The initial pack covers `0–9`; multi-digit values are formed by adjacent fixed-width tiles or by the runtime's bounded number slot.
-
-Use tabular numerals where the runtime font supports them. Do not let a changing number resize neighboring controls.
-
-### 3.4 Crop counting badges
-
-The six current crops receive simplified vector badges so arithmetic can show “three carrots” or “two tomatoes” without relying on emoji. The badge is an object-counting aid, not a replacement for the reviewed 3D crop models in the garden scene.
-
-Recognition details are intentionally retained:
-
-- carrot: exposed orange shoulder plus divided foliage;
-- tomato: round red fruit plus a green crown;
-- corn: yellow ear, vertical leaves, and stalk;
-- pumpkin: ribbed orange fruit plus short stem;
-- lettuce: cupped green rosette;
-- strawberry: red pointed fruit, leafy calyx, and pale seed marks.
-
-The badges may be repeated in a counting row, but should not become noisy repeating patterns. Prefer one badge plus an explicit count for larger quantities.
-
-### 3.5 Feedback and reward
-
-Feedback uses familiar garden actions rather than punitive marks:
-
-- correct: green check;
-- try again: amber circular arrow;
-- hint: blue water drop;
-- reward: gold star;
-- plant/start: sprout;
-- harvest/finish: wooden basket.
-
-Wrong answers should not use a large red X, harsh alarm red, or a shaking error illustration. The existing small shake motion may remain a behavior, but the artwork stays calm and inviting.
-
-## 4. Asset ledger
-
-| Asset | Role | Source format | Intended use | State |
+| ID | Asset / state | Carrier | Replacement contract | Priority |
 | --- | --- | --- | --- | --- |
-| `arithmetic_operator_tokens.svg` | `+ − × ÷ =` token strip | SVG, `920×190` viewBox | operator picker, equation row, review sheet | ready |
-| `arithmetic_number_tiles.svg` | `0–9` tile strip | SVG, `1210×190` viewBox | number picker / tile source | ready |
-| `arithmetic_crop_badges.svg` | six crop counting badges | SVG, `900×270` viewBox | counting prompts and result feedback | ready |
-| `arithmetic_feedback_icons.svg` | check, retry, hint, star, sprout, basket | SVG, `1080×310` viewBox | feedback, rewards, action affordances | ready |
-| `arithmetic_art_preview.svg` | contact sheet | SVG, `1280×980` viewBox | visual review / handoff | ready |
+| ARITH-CROP-01 | Consistent carrot, tomato, corn, pumpkin, lettuce and strawberry icons | Order slots, portrait strip, sharing tokens, recap | Fit existing 15–24 CSS px slots; preserve crop identity and transparent padding; no baked-in text | First batch |
+| ARITH-BASKET-01 | Empty, receiving and equal/filled basket | Optional sharing inside the existing completion dialog | Object-contain inside the fixed card; produce/counts remain separate DOM; do not bake in an answer | First batch |
+| ARITH-SLOT-01 | Empty and occupied crop slots | Desktop mission chips and notebook detail | Empty/occupied distinction survives grayscale; no larger chips or layout shifts | First batch |
+| ARITH-FEEDBACK-01 | Local harvest arrival and equal-baskets accent | Source pool / destination basket | Bounded, interruptible, reduced-motion aware; no permanent animation or extra scene pass | Later polish |
+| ARITH-GROUP-01 | Row/group markers | Future actual row sowing | Follow real plot membership and projection in both renderers; not a substitute for placement gameplay | After row-sowing design |
 
-The source SVGs are the canonical art. The strips are deliberately self-contained, dependency-free, and usable as review sheets before a later runtime sprite-export step.
+## Hard constraints
 
-## 5. Export and integration rules
+Game state owns all quantities. Art cannot supply, hide or alter counts. Scale inside the reserved box: never push the HUD, controls or garden out of position. The same crop must remain recognizable across order and sharing uses.
 
-### Fixed
+Put/take/next/return controls remain real buttons, with at least 44 CSS px touch targets independent of asset size. Decorations are not hit targets and must not intercept the controls. Token regions remain bounded so placing produce does not move the next tap target.
 
-- Preserve the source SVGs and their viewBoxes.
-- Export raster derivatives at `1×`, `2×`, and `3×` only when a consuming surface requires raster data.
-- Preserve transparent corners and the dark-green outline.
-- Keep an accessible text label or `aria-label` beside every interactive symbol in the runtime; the SVG itself is not the only accessibility channel.
-- Keep art state separate from arithmetic/game truth. Selecting `×` or showing a check must consume the existing game/UI state rather than creating a second state model.
+Keep this batch independent of 3D crop geometry, renderer ownership, NPCs, economy, water penalties and multiplayer. Replace asset surfaces only after checking desktop, 320px portrait, 2/3/4 baskets and all six crop counters. Preserve the live missing counts and visible empty slots.
 
-### Tuneable
-
-- final rendered pixel size per viewport;
-- shadow opacity and offset;
-- selected/pressed outline treatment;
-- whether crop badges are displayed individually or as a count-plus-badge composition;
-- exact operator token body color if contrast evidence calls for a small adjustment.
-
-### Not in this pack
-
-- final equation gameplay rules or question generation;
-- 3D crop geometry or stage transitions;
-- new renderer ownership, sprite atlases, or a texture-loading framework;
-- third-party artwork or fonts;
-- a full animated math-board scene.
-
-## 6. Review checklist
-
-- [ ] A child can identify each operator from its symbol alone.
-- [ ] Numerals remain readable at the smallest planned button size.
-- [ ] Crop badges are recognizable without emoji fallback.
-- [ ] Correct / retry / hint / reward states are distinct without relying on red-versus-green alone.
-- [ ] Icons remain legible on both the paper UI and the garden scene overlay.
-- [ ] No asset introduces a palette or visual effect that fights the existing garden.
-- [ ] The same SVG can be reviewed independently of the runtime and later wired into Canvas/WebGPU UI without a second art source.
-
-## 7. Handoff
-
-The finished external pack is stored in the [Eric's Garden — Arithmetic Art R1 Google Drive folder](https://drive.google.com/drive/folders/1aTr5TTzBJolMV9UrmwNt0p2z-tAY8smX) for art review and future export. GitHub carries this ledger as the normative style and inventory record; runtime code should only be wired in a later construction packet after the arithmetic gameplay contract and target surfaces are confirmed.
+No art was generated, purchased or uploaded externally in the #28 worklet. The subsequent #29 pack uses the project archive workflow documented in [the Drive round-trip record](experience/arithmetic-art-pack-drive-roundtrip-r1.md), not an untracked sandbox dependency.

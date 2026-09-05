@@ -11,7 +11,8 @@ For small, project-authored art packs, keep the construction contract in GitHub 
 
 ## Applied here
 
-- Ledger: [`docs/ARITHMETIC_ART_LEDGER_R1.md`](../ARITHMETIC_ART_LEDGER_R1.md)
+- Ledger: [`docs/ARITHMETIC_ART_LEDGER_R1.md`](../ARITHMETIC_ART_LEDGER_R1.md).
+- Full original direction and inventory: [`docs/ARITHMETIC_ART_DIRECTION_R1.md`](../ARITHMETIC_ART_DIRECTION_R1.md), preserved byte-for-byte when the independent #28/#29 ledger additions were reconciled.
 - Drive folder: [Eric's Garden — Arithmetic Art R1](https://drive.google.com/drive/folders/1aTr5TTzBJolMV9UrmwNt0p2z-tAY8smX)
 - Pack contents: operator tokens, number tiles, six crop badges, feedback icons, contact sheet, README, and ZIP archive.
 
