@@ -1,0 +1,128 @@
+<svg xmlns="http://www.w3.org/2000/svg">
+  <symbol id="crop-carrot" viewBox="10 8 132 184">
+    <g stroke="#26352c" stroke-width="4" stroke-linejoin="round">
+      <path d="M64 69c-21-28-25-50-18-54 18 4 27 20 21 48 14-30 30-38 38-32 2 16-9 32-34 46" fill="#6f9d5e" />
+      <path d="M64 73l-26 99c-2 9 8 16 18 13l13-4 20 5c10 3 19-7 16-16L77 73Z" fill="#df7b3c" />
+      <path d="M47 115l39 3M43 137l48 4" fill="none" stroke="#b75c31" stroke-width="3" />
+    </g>
+  </symbol>
+  <symbol id="crop-tomato" viewBox="10 8 132 184">
+    <g stroke="#26352c" stroke-width="4" stroke-linejoin="round">
+      <path d="M63 74c-4-20 7-34 25-42 5 19-3 34-25 42" fill="#6f9d5e" />
+      <circle cx="64" cy="125" r="48" fill="#d85b4d" />
+      <path d="M64 78v94M17 125h94" opacity=".16" fill="none" />
+      <path d="M43 111c4-7 8-7 12 0M73 103c4-7 8-7 12 0M41 143c4-7 8-7 12 0M74 145c4-7 8-7 12 0" fill="#f7edcc" stroke-width="2" />
+    </g>
+  </symbol>
+  <symbol id="crop-corn" viewBox="10 8 132 184">
+    <g stroke="#26352c" stroke-width="4" stroke-linejoin="round">
+      <path d="M65 185V47" stroke="#557b43" stroke-width="8" />
+      <path d="M59 71C33 58 25 39 31 30c24 2 35 20 31 42M70 102c28-12 41-28 37-40-23 0-37 17-39 34M59 132c-23-8-36-23-34-35 22 0 35 13 38 27" fill="#6f9d5e" />
+      <path d="M47 102h38v73c-9 15-29 15-38 0Z" fill="#e8c24f" />
+      <path d="M53 113v49M65 109v55M77 113v49" stroke="#b9822f" stroke-width="2" />
+    </g>
+  </symbol>
+  <symbol id="crop-pumpkin" viewBox="10 8 132 184">
+    <g stroke="#26352c" stroke-width="4" stroke-linejoin="round">
+      <path d="M64 152c-31 0-46-20-44-49 2-32 21-51 44-51s42 19 44 51c2 29-13 49-44 49Z" fill="#e08d42" />
+      <path d="M64 52c-2-19 11-28 25-31 2 16-7 28-25 31Z" fill="#557b43" />
+      <path d="M64 76v68M36 92c18 9 38 9 56 0M35 119c19 10 39 10 58 0" fill="none" stroke="#bf7134" stroke-width="3" />
+    </g>
+  </symbol>
+  <symbol id="crop-lettuce" viewBox="10 8 132 184">
+    <g stroke="#26352c" stroke-width="4" stroke-linejoin="round">
+      <path d="M64 181c-37-7-49-32-38-55 9-18 27-29 38-25-3-25 8-46 22-45 14 8 18 26 8 49 22-11 40-3 43 11-3 20-24 30-48 27 11 21 4 36-25 38Z" fill="#6f9d5e" />
+      <path d="M64 83c-15 25-14 67 0 98M45 112c9 7 18 11 28 11M84 107c-8 11-17 16-27 17" fill="none" stroke="#456f3d" stroke-width="3" />
+    </g>
+  </symbol>
+  <symbol id="crop-strawberry" viewBox="10 8 132 184">
+    <g stroke="#26352c" stroke-width="4" stroke-linejoin="round">
+      <path d="M64 181c-25-1-43-19-42-45 2-33 20-64 42-79 22 15 40 46 42 79 1 26-17 44-42 45Z" fill="#d85b4d" />
+      <path d="M64 65c-13-19-29-21-39-14 6 15 18 23 36 23-3-22 9-35 23-39 7 13 1 26-17 38 18-7 31-2 36 8-13 10-27 9-39 0Z" fill="#6f9d5e" />
+      <path d="M45 118h4M62 104h4M81 122h4M54 143h4M76 153h4" stroke="#f7edcc" stroke-width="6" stroke-linecap="round" />
+    </g>
+  </symbol>
+  <symbol id="op-plus" viewBox="-3 -3 156 152">
+    <g stroke="#26352c" stroke-width="5" stroke-linejoin="round">
+      <rect width="150" height="146" rx="34" fill="#dfe9d2" />
+      <path d="M75 40v66M42 73h66" stroke="#2f5639" stroke-width="15" stroke-linecap="round" />
+      <path d="M26 123c27 12 71 14 101 0" fill="none" stroke="#9a6c49" stroke-width="5" opacity=".8" />
+    </g>
+  </symbol>
+  <symbol id="op-minus" viewBox="-3 -3 156 152">
+    <g stroke="#26352c" stroke-width="5" stroke-linejoin="round">
+      <rect width="150" height="146" rx="34" fill="#e8c87d" />
+      <path d="M42 73h66" stroke="#6d5522" stroke-width="15" stroke-linecap="round" />
+      <path d="M23 121c28 9 74 11 105-2" fill="none" stroke="#a2763f" stroke-width="5" opacity=".75" />
+    </g>
+  </symbol>
+  <symbol id="op-multiply" viewBox="-3 -3 156 152">
+    <g stroke="#26352c" stroke-width="5" stroke-linejoin="round">
+      <rect width="150" height="146" rx="34" fill="#f1d9a0" />
+      <path d="M48 46l54 54M102 46L48 100" stroke="#7b5a2f" stroke-width="14" stroke-linecap="round" />
+      <circle cx="40" cy="119" r="6" fill="#6f9d5e" stroke="none" />
+      <circle cx="110" cy="119" r="6" fill="#6f9d5e" stroke="none" />
+    </g>
+  </symbol>
+  <symbol id="op-divide" viewBox="-3 -3 156 152">
+    <g stroke="#26352c" stroke-width="5" stroke-linejoin="round">
+      <rect width="150" height="146" rx="34" fill="#e7d7b3" />
+      <path d="M42 73h66" stroke="#6d5522" stroke-width="12" stroke-linecap="round" />
+      <circle cx="75" cy="44" r="9" fill="#6d5522" stroke="none" />
+      <circle cx="75" cy="102" r="9" fill="#6d5522" stroke="none" />
+    </g>
+  </symbol>
+  <symbol id="op-equals" viewBox="-3 -3 156 152">
+    <g stroke="#26352c" stroke-width="5" stroke-linejoin="round">
+      <rect width="150" height="146" rx="34" fill="#d7e8df" />
+      <path d="M40 62h70M40 88h70" stroke="#2f5639" stroke-width="13" stroke-linecap="round" />
+      <path d="M75 118c13-17 28-9 28 4-15 11-29 7-28-4Z" fill="#6f9d5e" stroke-width="4" />
+    </g>
+  </symbol>
+  <symbol id="feedback-correct" viewBox="0 36 160 160">
+    <g stroke="#26352c" stroke-width="5" stroke-linejoin="round" stroke-linecap="round">
+      <circle cx="80" cy="116" r="76" fill="#dfe9d2" />
+      <path d="m43 116 23 24 51-58" fill="none" stroke="#2f5639" stroke-width="17" />
+    </g>
+  </symbol>
+  <symbol id="feedback-retry" viewBox="0 36 160 160">
+    <g stroke="#26352c" stroke-width="5" stroke-linejoin="round" stroke-linecap="round">
+      <circle cx="80" cy="116" r="76" fill="#f7edcc" />
+      <path d="M112 86a45 45 0 1 0 3 51" fill="none" stroke="#b9783e" stroke-width="13" />
+      <path d="m113 72 3 41-38-7" fill="#b9783e" />
+    </g>
+  </symbol>
+  <symbol id="feedback-water" viewBox="0 36 160 160">
+    <g stroke="#26352c" stroke-width="5" stroke-linejoin="round" stroke-linecap="round">
+      <circle cx="80" cy="116" r="76" fill="#d7e8df" />
+      <path d="M80 50c-22 31-34 48-34 65a34 34 0 0 0 68 0c0-17-12-34-34-65Z" fill="#7bb5c1" />
+      <path d="M59 134c8 11 17 16 29 14" fill="none" stroke="#dff1ef" stroke-width="6" />
+    </g>
+  </symbol>
+  <symbol id="feedback-star" viewBox="0 36 160 160">
+    <g stroke="#26352c" stroke-width="5" stroke-linejoin="round" stroke-linecap="round">
+      <circle cx="80" cy="116" r="76" fill="#fff0bb" />
+      <path d="m80 46 20 48 52 5-39 34 12 51-45-27-45 27 12-51-39-34 52-5Z" fill="#d8a43b" />
+    </g>
+  </symbol>
+  <symbol id="feedback-seed" viewBox="0 36 160 160">
+    <g stroke="#26352c" stroke-width="5" stroke-linejoin="round" stroke-linecap="round">
+      <circle cx="80" cy="116" r="76" fill="#eef1d9" />
+      <path d="M80 168V90M80 117C52 114 42 96 43 77c22 0 36 10 37 31M81 135c24-2 38-14 39-33-22-1-36 8-39 27" fill="#6f9d5e" />
+    </g>
+  </symbol>
+  <symbol id="feedback-basket" viewBox="0 36 160 160">
+    <g stroke="#26352c" stroke-width="5" stroke-linejoin="round" stroke-linecap="round">
+      <circle cx="80" cy="116" r="76" fill="#f1d9a0" />
+      <path d="M39 103h82l-9 73H48Z" fill="#b77a43" />
+      <path d="M39 103c0-19 16-28 41-28s41 9 41 28M57 75c-4-21 9-32 22-35 3 16-5 29-22 35Z" fill="none" />
+      <path d="M49 126h62" fill="none" stroke="#8b5b38" stroke-width="4" />
+    </g>
+  </symbol>
+  <symbol id="number-tile" viewBox="-3 -3 110 152">
+    <g font-family="Inter, ui-rounded, 'SF Pro Rounded', 'PingFang SC', sans-serif" font-size="76" font-weight="850" text-anchor="middle">
+      <rect width="104" height="146" rx="27" fill="#fffaf0" stroke="#26352c" stroke-width="4" />
+      <circle cx="20" cy="22" r="6" fill="#d8a43b" />
+    </g>
+  </symbol>
+</svg>

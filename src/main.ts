@@ -23,7 +23,6 @@ import {
   type ActionResult,
   type CropId,
   type GameState,
-  type Question,
   type Tool,
 } from "./game/model";
 import {
@@ -48,6 +47,9 @@ import {
 } from "./scene/camera-controls";
 import { countCare } from "./game/arithmetic";
 import { renderOrder, renderArithmeticCompletion, type SharingAction } from "./ui/arithmetic";
+import { cropArt, feedbackArt } from "./ui/arithmetic-art";
+import { gardenQuestion } from "./ui/arithmetic-learning";
+import { renderLearningQuestion } from "./ui/arithmetic-question";
 import { createSceneSnapshot } from "./scene/snapshot";
 
 const RENDER_SETTINGS_KEY = "eric-secret-garden-render-r1";
@@ -117,6 +119,7 @@ let state = loadState(localStorage);
 let renderSettings = loadRenderSettings();
 let cameraView = loadCameraView(state.camera.zoom);
 let toastTimer = 0;
+let statsScrollBeforeQuestion = 0;
 
 syncSettingsControls(diagnostics, renderSettings);
 const runtime = new RenderRuntime({
@@ -153,11 +156,11 @@ function update(): void {
   element.growth.textContent = `🌿 生长 ${state.round}/${MAX_STAGE}`;
 
   if (order.complete) {
-    element.growIcon.textContent = "🧺";
+    element.growIcon.replaceChildren(feedbackArt("basket"));
     element.growLabel.textContent = "看看菜篮";
     element.growSubLabel.textContent = "分一分，或者开始下一关";
   } else if (!state.planted) {
-    element.growIcon.textContent = "🌱";
+    element.growIcon.replaceChildren(feedbackArt("seed"));
     element.growLabel.textContent = "播种";
     element.growSubLabel.textContent = "按一下开始今天的菜园";
   } else if (state.round < MAX_STAGE) {
@@ -166,7 +169,7 @@ function update(): void {
     element.growSubLabel.textContent = care.remaining ? `还需 ${care.remaining} 块 · 点菜地浇水`
       : care.pests ? `还有 ${care.pests} 块 · 点小虫保护它` : "照顾好了，让小苗长高吧";
   } else {
-    element.growIcon.textContent = "🧺";
+    element.growIcon.replaceChildren(feedbackArt("basket"));
     element.growLabel.textContent = "收菜";
     element.growSubLabel.textContent = "换成收菜，点成熟蔬菜";
   }
@@ -209,6 +212,8 @@ function commit(result: ActionResult, options: { showComplete?: boolean } = {}):
 
 function showLevelComplete(): void {
   const last = state.level === LEVELS.length - 1;
+  if (element.stats.open) element.stats.close();
+  element.levelDialog.querySelector(".celebration-icon")?.replaceChildren(feedbackArt("star"));
   element.completeTitle.textContent = last ? "秘密菜园大丰收！" : "这一篮收好啦！";
   element.completeText.textContent = last
     ? "你把 R2 的五关都照顾完了。"
@@ -223,6 +228,8 @@ function showLevelComplete(): void {
 }
 
 function showStats(): void {
+  if (element.levelDialog.open) element.levelDialog.close();
+  endQuestion(false);
   const cropIds = (Object.keys(CROPS) as CropId[]).filter(
     (crop) => currentLevel(state).targets[crop] || state.totalHarvest[crop],
   );
@@ -238,8 +245,10 @@ function showStats(): void {
       target += cropTarget;
       left += remaining;
       const row = document.createElement("tr");
+      const cropCell = tableCell(CROPS[crop][0]);
+      cropCell.prepend(cropArt(crop));
       row.append(
-        tableCell(`${CROPS[crop][1]} ${CROPS[crop][0]}`),
+        cropCell,
         tableCell(String(harvested)),
         tableCell(cropTarget ? String(cropTarget) : "—"),
         tableCell(cropTarget ? String(remaining) : "—"),
@@ -263,35 +272,27 @@ function showStats(): void {
   );
   element.questionBox.hidden = true;
   if (!element.stats.open) element.stats.showModal();
+  element.stats.querySelector(".dialog-shell")?.scrollTo(0, 0);
 }
 
-function renderQuestion(container: HTMLElement, question: Question): void {
-  container.replaceChildren();
-  const title = document.createElement("div");
-  title.className = "question-title";
-  title.textContent = `💡 ${question.text}`;
-  const answers = document.createElement("div");
-  answers.className = "answer-row";
-  const result = document.createElement("div");
-  result.className = "answer-result";
-  for (const choice of question.choices) {
-    const button = document.createElement("button");
-    button.className = "answer-btn";
-    button.type = "button";
-    button.dataset.answer = choice;
-    button.textContent = question.numeric
-      ? choice
-      : isCropId(choice)
-        ? `${CROPS[choice][1]} ${CROPS[choice][0]}`
-        : choice;
-    button.addEventListener("click", () => {
-      const correct = choice === question.answer;
-      button.classList.add(correct ? "correct" : "wrong");
-      result.textContent = correct ? "答对啦！🌟" : "再看看，试一次。";
-    });
-    answers.append(button);
+function endQuestion(restoreFocus = true): void {
+  element.questionBox.hidden = true;
+  element.questionBox.replaceChildren();
+  delete element.stats.dataset.learning;
+  if (restoreFocus) {
+    element.stats.querySelector(".dialog-shell")?.scrollTo(0, statsScrollBeforeQuestion);
+    element.questionButton.focus({ preventScroll: true });
   }
-  container.append(title, answers, result);
+}
+
+function startQuestion(): void {
+  statsScrollBeforeQuestion = element.stats.querySelector(".dialog-shell")?.scrollTop ?? 0;
+  element.stats.dataset.learning = "true";
+  element.questionBox.hidden = false;
+  renderLearningQuestion(element.questionBox, gardenQuestion(state), () => endQuestion());
+  // The needed column is copied into the question surface before unrelated
+  // statistics are collapsed. Start at the title, not the old table scroll.
+  element.stats.querySelector(".dialog-shell")?.scrollTo(0, 0);
 }
 
 function showToast(text: string, duration = 1700): void {
@@ -355,10 +356,9 @@ element.resetButton.addEventListener("click", () => {
     showToast("已经重新开始。");
   }
 });
-element.questionButton.addEventListener("click", () => {
-  element.questionBox.hidden = false;
-  renderQuestion(element.questionBox, currentLevel(state).question);
-});
+element.questionButton.addEventListener("click", startQuestion);
+element.stats.addEventListener("close", () => endQuestion(false));
+document.querySelector('[data-tool="water"] > span')?.replaceChildren(feedbackArt("water"));
 element.next.addEventListener("click", () => {
   const result = advanceLevel(state);
   saveState(localStorage, state);

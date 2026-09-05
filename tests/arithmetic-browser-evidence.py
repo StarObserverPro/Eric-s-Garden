@@ -10,6 +10,7 @@ import os
 import shutil
 from pathlib import Path
 from playwright.sync_api import sync_playwright
+from arithmetic_ui_browser_support import question_journey, assert_sharing_recap
 
 URL = os.environ.get("ARITHMETIC_URL", "http://127.0.0.1:4175")
 OUT = Path(os.environ.get("ARITHMETIC_EVIDENCE", "browser-evidence/arithmetic"))
@@ -161,10 +162,11 @@ def share(page, touch, name):
             activate(page, '[data-focus-key="take-0"]', touch)
             activate(page, f'[data-focus-key="put-{destination}"]', touch)
     assert page.locator('.sharing-result[data-equal="true"]').count() == 1
-    assert page.locator('.sharing-equation').inner_text().startswith(f"{total} ÷ {baskets} = {each}")
+    assert page.locator('.sharing-equation').get_attribute('aria-label').startswith(f"{total} ÷ {baskets} = {each}")
     assert_tokens(page, total)
     check_layout(page, f"{name}-sharing-equal", touch, True)
     screenshot(page, f"{name}-sharing-equal")
+    assert_sharing_recap(page, name, OUT)
     after = saved(page)
     for field in ["harvested", "totalHarvest", "stars"]:
         assert after[field] == original[field], f"sharing changed {field}"
@@ -219,7 +221,12 @@ with sync_playwright() as playwright:
                         settle(page)
                     check_layout(page, f"{name}-level{level}-order", touch)
                     assert page.locator('#orderHud .order-hud-crop').count() == (6 if level == 4 else 5 if level >= 2 else 4)
+                    question_journey(page, touch, f"{name}-level{level}-target", level, OUT)
                     grow_to_harvest(page, touch)
+                    if level >= 3:
+                        activate(page, ".arithmetic-close", touch)
+                        question_journey(page, touch, f"{name}-level{level}-collected", level, OUT, collected=True)
+                        activate(page, "#growBtn", touch)
                     assert saved(page)["stars"] == (level + 1) * 3
                     if level == 1:
                         activate(page, '#nextLevelBtn', touch)

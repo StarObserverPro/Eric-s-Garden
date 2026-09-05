@@ -12,6 +12,7 @@ on:
       - 'styles.css'
       - 'package*.json'
       - 'tests/arithmetic-browser-evidence.py'
+      - 'tests/arithmetic_ui_browser_support.py'
       - '.github/workflows/arithmetic-playability.yml'
   push:
     branches: [main]
@@ -25,6 +26,7 @@ on:
       - 'styles.css'
       - 'package*.json'
       - 'tests/arithmetic-browser-evidence.py'
+      - 'tests/arithmetic_ui_browser_support.py'
       - '.github/workflows/arithmetic-playability.yml'
 
 permissions:
@@ -64,6 +66,7 @@ jobs:
           set -euo pipefail
           mkdir -p browser-evidence/arithmetic
           git rev-parse HEAD > browser-evidence/arithmetic/checked-out.sha
+          git ls-tree -r HEAD > browser-evidence/arithmetic/source-tree.txt
           setsid npx vite preview --host 127.0.0.1 --port 4175 --strictPort >browser-evidence/arithmetic/preview.log 2>&1 &
           SERVER_PID=$!
           trap 'kill -- -"$SERVER_PID" 2>/dev/null || true' EXIT
