@@ -57,7 +57,7 @@ export function setHudLabel(host: HTMLElement, name: HudArtName, label: string):
 }
 
 export function legacyHudArtName(iconText: string): HudArtName | undefined {
-  return legacyNames.get(iconText.replace(/\uFE0F/g, ""));
+  return legacyNames.get(iconText) ?? legacyNames.get(iconText.replace(/\uFE0F/g, ""));
 }
 
 export function installGeneralHudArt(): void {
