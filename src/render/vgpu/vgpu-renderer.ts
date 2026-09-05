@@ -21,6 +21,7 @@ import {
 } from "vgpu";
 
 import type { CropId } from "../../game/model";
+import { hudArtImage, type HudArtName } from "../../ui/general-hud-art";
 import type { GardenSceneSnapshot, Vec3, WeatherProfile } from "../../scene/snapshot";
 import {
   INSTANCE_TIERS,
@@ -488,7 +489,16 @@ export class VgpuRenderer implements GardenRenderer {
       marker.root.style.top = `${plantPoint.y}px`;
       marker.root.style.zIndex = String(Math.round(plantPoint.y));
       marker.root.style.setProperty("--crop-scale", String(markerScale));
-      marker.badge.textContent = plot.pest ? "🐛" : plot.stage >= 4 ? "✨" : "";
+      const badgeArt: HudArtName | undefined = plot.pest
+        ? "status-pest"
+        : plot.stage >= 4
+          ? "status-mature"
+          : undefined;
+      if (marker.badge.dataset.hudArt !== (badgeArt ?? "")) {
+        marker.badge.replaceChildren();
+        marker.badge.dataset.hudArt = badgeArt ?? "";
+        if (badgeArt) marker.badge.append(hudArtImage(badgeArt));
+      }
     }
   }
 }

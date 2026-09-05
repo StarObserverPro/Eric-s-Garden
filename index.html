@@ -13,7 +13,7 @@
   <div id="app" class="app-shell">
     <header class="topbar">
       <div class="brand-wrap">
-        <div class="brand-mark" aria-hidden="true">🌱</div>
+        <div class="brand-mark" data-hud-art="brand-sprout" aria-hidden="true"></div>
         <div>
           <div class="eyebrow">ERIC'S SECRET GARDEN · VGPU R1</div>
           <h1>Eric 的秘密菜园</h1>
@@ -21,9 +21,9 @@
       </div>
 
       <div class="top-actions">
-        <button id="speakBtn" class="icon-btn" type="button" aria-label="朗读今天的任务" title="朗读今天的任务">🔊</button>
-        <button id="statsBtn" class="pill-btn" type="button">📊 统计表</button>
-        <button id="resetBtn" class="icon-btn quiet" type="button" aria-label="重新开始" title="重新开始">↻</button>
+        <button id="speakBtn" class="icon-btn" type="button" aria-label="朗读今天的任务" title="朗读今天的任务"><span data-hud-art="utility-speak"></span></button>
+        <button id="statsBtn" class="pill-btn" type="button"><span data-hud-art="utility-stats"></span> 统计表</button>
+        <button id="resetBtn" class="icon-btn quiet" type="button" aria-label="重新开始" title="重新开始"><span data-hud-art="utility-reset"></span></button>
       </div>
     </header>
 
@@ -44,9 +44,9 @@
         <p id="missionHint" class="mission-hint">按下面的“播种 / 长大”，菜地会先自动播下这一关需要的种子。</p>
         <div id="targetList" class="target-list" aria-label="本关目标"></div>
         <div class="status-strip" aria-label="照料状态">
-          <span id="waterStatus">💧 浇水 0/0</span>
-          <span id="sprayStatus">🛡️ 虫害 0</span>
-          <span id="growthStatus">🌿 生长 0/4</span>
+          <span id="waterStatus"><span data-hud-art="status-water"></span> 浇水 0/0</span>
+          <span id="sprayStatus"><span data-hud-art="status-protected"></span> 虫害 0</span>
+          <span id="growthStatus"><span data-hud-art="status-grow"></span> 生长 0/4</span>
         </div>
       </aside>
 
@@ -101,8 +101,8 @@
         </details>
 
         <div class="stage-corner stage-corner-left">
-          <span>↔ 拖动转一转</span>
-          <span>🤏 双指缩放</span>
+          <span><span data-hud-art="gesture-rotate"></span> 拖动转一转</span>
+          <span><span data-hud-art="gesture-zoom"></span> 双指缩放</span>
         </div>
         <div id="toast" class="toast" role="status" aria-live="polite"></div>
       </section>
@@ -113,11 +113,11 @@
             <p class="eyebrow">GARDEN NOTE · 菜园小本本</p>
             <h2>今天发生了什么？</h2>
           </div>
-          <span id="starCount" class="star-count">⭐ 0</span>
+          <span id="starCount" class="star-count"><span data-hud-art="reward-star"></span> 0</span>
         </div>
         <div id="eventLog" class="event-log"></div>
         <div class="unlock-box">
-          <span id="unlockIcon">🔒</span>
+          <span id="unlockIcon" data-hud-art="utility-lock"></span>
           <div>
             <strong id="unlockTitle">菜地成长计划</strong>
             <p id="unlockText">再过 2 关解锁生菜</p>
@@ -128,12 +128,12 @@
 
     <section class="control-deck" aria-label="菜园工具">
       <div class="tool-group" role="group" aria-label="照料工具">
-        <button class="tool-btn active" data-tool="harvest" type="button"><span>🧺</span><b>收菜</b><small>Harvest</small></button>
-        <button class="tool-btn" data-tool="water" type="button"><span>💧</span><b>浇水</b><small>Water</small></button>
-        <button class="tool-btn" data-tool="spray" type="button"><span>🧴</span><b>喷药</b><small>Protect</small></button>
+        <button class="tool-btn active" data-tool="harvest" type="button"><span data-hud-art="tool-harvest"></span><b>收菜</b><small>Harvest</small></button>
+        <button class="tool-btn" data-tool="water" type="button"><span data-hud-art="tool-water"></span><b>浇水</b><small>Water</small></button>
+        <button class="tool-btn" data-tool="spray" type="button"><span data-hud-art="tool-protect"></span><b>喷药</b><small>Protect</small></button>
       </div>
       <button id="growBtn" class="grow-btn" type="button">
-        <span id="growIcon">🌱</span>
+        <span id="growIcon" data-hud-art="tool-grow"></span>
         <span>
           <b id="growLabel">播种</b>
           <small id="growSubLabel">按一下开始今天的菜园</small>
@@ -159,7 +159,7 @@
           <tfoot id="statsFoot"></tfoot>
         </table>
       </div>
-      <button id="questionBtn" class="secondary-btn" type="button">💡 看表格想一想</button>
+      <button id="questionBtn" class="secondary-btn" type="button"><span data-hud-art="learning-hint"></span> 看表格想一想</button>
       <div id="questionBox" class="question-box" hidden></div>
     </form>
   </dialog>
@@ -167,7 +167,7 @@
   <dialog id="levelDialog" class="dialog-card celebration-dialog arithmetic-dialog" aria-labelledby="completeTitle">
     <form method="dialog" class="dialog-shell">
       <button class="arithmetic-close" type="submit" value="close" aria-label="回到菜园，保留分篮进度">×</button>
-      <div class="celebration-icon">🌟</div>
+      <div class="celebration-icon" data-hud-art="reward-star"></div>
       <p class="eyebrow">LEVEL COMPLETE</p>
       <h2 id="completeTitle">这一篮收好啦！</h2>
       <p id="completeText">你完成了今天的菜园任务。</p>

@@ -48,6 +48,7 @@ import {
 import { countCare } from "./game/arithmetic";
 import { renderOrder, renderArithmeticCompletion, type SharingAction } from "./ui/arithmetic";
 import { cropArt, feedbackArt } from "./ui/arithmetic-art";
+import { hudArtImage, legacyHudArtName, setHudLabel } from "./ui/general-hud-art";
 import { gardenQuestion } from "./ui/arithmetic-learning";
 import { renderLearningQuestion } from "./ui/arithmetic-question";
 import { createSceneSnapshot } from "./scene/snapshot";
@@ -146,45 +147,45 @@ function update(): void {
   element.progressFill.style.width = `${Math.min(100, target > 0 ? harvested / target * 100 : 0)}%`;
   element.title.textContent = level.title;
   element.hint.textContent = order.complete ? "菜都装好了，去看看这一篮吧。" : state.round >= MAX_STAGE ? `还差 ${order.remaining} 棵，看看哪种菜还没装满。` : level.hint;
-  element.stars.textContent = `⭐ ${state.stars}`;
+  setHudLabel(element.stars, "reward-star", String(state.stars));
 
   renderOrder(element.target, element.orderHud, state);
   const care = countCare(state.plots, MAX_STAGE);
-  element.water.textContent = `💧 还需 ${care.remaining} 块`;
+  setHudLabel(element.water, "status-water", `还需 ${care.remaining} 块`);
   element.water.setAttribute("aria-label", `已浇 ${care.watered} 块，共 ${care.total} 块，还需 ${care.remaining} 块`);
-  element.spray.textContent = care.pests ? `🐛 还剩 ${care.pests} 块` : "🛡️ 无小虫";
-  element.growth.textContent = `🌿 生长 ${state.round}/${MAX_STAGE}`;
+  setHudLabel(element.spray, care.pests ? "status-pest" : "status-protected", care.pests ? `还剩 ${care.pests} 块` : "无小虫");
+  setHudLabel(element.growth, "status-grow", `生长 ${state.round}/${MAX_STAGE}`);
 
   if (order.complete) {
-    element.growIcon.replaceChildren(feedbackArt("basket"));
+    element.growIcon.replaceChildren(hudArtImage("tool-harvest"));
     element.growLabel.textContent = "看看菜篮";
     element.growSubLabel.textContent = "分一分，或者开始下一关";
   } else if (!state.planted) {
-    element.growIcon.replaceChildren(feedbackArt("seed"));
+    element.growIcon.replaceChildren(hudArtImage("tool-grow"));
     element.growLabel.textContent = "播种";
     element.growSubLabel.textContent = "按一下开始今天的菜园";
   } else if (state.round < MAX_STAGE) {
-    element.growIcon.textContent = "🌿";
+    element.growIcon.replaceChildren(hudArtImage("tool-grow"));
     element.growLabel.textContent = care.remaining ? "先浇水" : care.pests ? "赶走小虫" : "长大一步";
     element.growSubLabel.textContent = care.remaining ? `还需 ${care.remaining} 块 · 点菜地浇水`
       : care.pests ? `还有 ${care.pests} 块 · 点小虫保护它` : "照顾好了，让小苗长高吧";
   } else {
-    element.growIcon.replaceChildren(feedbackArt("basket"));
+    element.growIcon.replaceChildren(hudArtImage("tool-harvest"));
     element.growLabel.textContent = "收菜";
     element.growSubLabel.textContent = "换成收菜，点成熟蔬菜";
   }
 
   element.eventLog.replaceChildren(...state.log.map((entry) => logItem(entry.icon, entry.title, entry.text)));
   if (state.level < 2) {
-    element.unlockIcon.textContent = "🔒";
+    element.unlockIcon.replaceChildren(hudArtImage("utility-lock"));
     element.unlockTitle.textContent = "菜地成长计划";
     element.unlockText.textContent = `再过 ${2 - state.level} 关解锁生菜`;
   } else if (state.level < 4) {
-    element.unlockIcon.textContent = "🥬";
+    element.unlockIcon.replaceChildren(cropArt("lettuce"));
     element.unlockTitle.textContent = "生菜已经解锁";
     element.unlockText.textContent = `再过 ${4 - state.level} 关会见到草莓`;
   } else {
-    element.unlockIcon.textContent = "🍓";
+    element.unlockIcon.replaceChildren(cropArt("strawberry"));
     element.unlockTitle.textContent = "草莓已经解锁";
     element.unlockText.textContent = state.completed ? "秘密菜园 R2 已全部通关" : "最后一关，把它们照顾成熟吧";
   }
@@ -213,7 +214,7 @@ function commit(result: ActionResult, options: { showComplete?: boolean } = {}):
 function showLevelComplete(): void {
   const last = state.level === LEVELS.length - 1;
   if (element.stats.open) element.stats.close();
-  element.levelDialog.querySelector(".celebration-icon")?.replaceChildren(feedbackArt("star"));
+  element.levelDialog.querySelector(".celebration-icon")?.replaceChildren(hudArtImage("reward-star"));
   element.completeTitle.textContent = last ? "秘密菜园大丰收！" : "这一篮收好啦！";
   element.completeText.textContent = last
     ? "你把 R2 的五关都照顾完了。"
@@ -358,7 +359,7 @@ element.resetButton.addEventListener("click", () => {
 });
 element.questionButton.addEventListener("click", startQuestion);
 element.stats.addEventListener("close", () => endQuestion(false));
-document.querySelector('[data-tool="water"] > span')?.replaceChildren(feedbackArt("water"));
+document.querySelector('[data-tool="water"] > span')?.replaceChildren(hudArtImage("tool-water"));
 element.next.addEventListener("click", () => {
   const result = advanceLevel(state);
   saveState(localStorage, state);
@@ -569,7 +570,9 @@ function logItem(iconText: string, titleText: string, bodyText: string): HTMLEle
   item.className = "log-item";
   const icon = document.createElement("span");
   icon.className = "log-icon";
-  icon.textContent = iconText;
+  const art = legacyHudArtName(iconText);
+  if (art) icon.append(hudArtImage(art));
+  else icon.textContent = iconText;
   const content = document.createElement("div");
   const title = document.createElement("b");
   title.textContent = titleText;
@@ -583,7 +586,13 @@ function logItem(iconText: string, titleText: string, bodyText: string): HTMLEle
 function rewardPill(text: string): HTMLElement {
   const pill = document.createElement("span");
   pill.className = "reward-pill";
-  pill.textContent = text;
+  const token = text.trim().split(/\s+/)[0] ?? "";
+  const art = legacyHudArtName(token);
+  if (art) {
+    pill.append(hudArtImage(art), document.createTextNode(` ${text.slice(token.length).trim()}`));
+  } else {
+    pill.textContent = text;
+  }
   return pill;
 }
 

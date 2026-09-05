@@ -1,0 +1,16 @@
+{
+  "pack": "general-hud-r1",
+  "sourceFolder": "https://drive.google.com/drive/folders/1Iw2D_R_KAnvDhQHGJzpCE5IEvhzxWb5a",
+  "runtimeSize": "2x",
+  "derivatives": {
+    "1x": "64x64",
+    "2x": "128x128",
+    "3x": "192x192"
+  },
+  "uniqueAssets": 21,
+  "format": "WebP RGBA transparent",
+  "approvedUnchanged": [
+    "weather",
+    "arithmetic-operators"
+  ]
+}

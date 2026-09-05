@@ -162,7 +162,7 @@ tfoot td { font-weight: 850; }
   .brand-wrap .eyebrow { display: none; }
   h1 { font-size: 20px; }
   .pill-btn { width: 42px; overflow: hidden; padding: 0; color: transparent; position: relative; }
-  .pill-btn::after { content: "📊"; color: var(--ink); position: absolute; inset: 0; display: grid; place-items: center; }
+  .pill-btn::after { content: none; }
   .game-layout { display: flex; flex-direction: column; gap: 10px; }
   .mission-card { padding: 15px; order: 1; }
   .garden-stage { order: 2; min-height: 470px; }
@@ -206,3 +206,21 @@ tfoot td { font-weight: 850; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
 }
+
+
+/* General HUD Art R1: authored WebP stays decorative and never owns layout or input. */
+.hud-art { display: inline-block; width: 1em; height: 1em; flex: 0 0 auto; object-fit: contain; vertical-align: middle; pointer-events: none; }
+.brand-mark .hud-art { width: 34px; height: 34px; }
+.top-actions .hud-art, .pill-btn .hud-art, .icon-btn .hud-art { width: 22px; height: 22px; }
+.tool-btn > span .hud-art { width: 27px; height: 27px; }
+#growIcon .hud-art { width: 32px; height: 32px; }
+.status-strip .hud-art { width: 18px; height: 18px; }
+.star-count .hud-art { width: 19px; height: 19px; }
+.stage-corner span .hud-art { width: 15px; height: 15px; }
+.log-icon .hud-art { width: 23px; height: 23px; }
+.unlock-box > span .hud-art { width: 26px; height: 26px; }
+.reward-pill .hud-art { width: 20px; height: 20px; }
+.celebration-icon .hud-art { width: 44px; height: 44px; }
+.secondary-btn .hud-art { width: 21px; height: 21px; }
+.crop-marker-badge { display: grid; place-items: center; width: 22px; height: 22px; min-width: 22px; }
+.crop-marker-badge .hud-art { width: 22px; height: 22px; }
