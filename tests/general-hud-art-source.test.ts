@@ -10,8 +10,8 @@ test("General HUD Art R1 keeps all 21 assets at all three sizes", () => {
   expect(source).toContain("general-hud-r1/webp/2x/");
   for (const size of ["1x", "2x", "3x"]) {
     for (const name of names) {
-      const bytes = readFileSync(new URL(`${size}/${name}-${size}.webp`, root));
-      expect(bytes.byteLength).toBeGreaterThan(0);
+      const base64 = readFileSync(new URL(`${size}/${name}-${size}.webp`, root), "base64");
+      expect(base64.length).toBeGreaterThan(0);
     }
   }
 });
