@@ -1,52 +1,39 @@
-import { CROPS } from "../../game/model";
-import type { GardenSceneSnapshot, Vec3 } from "../../scene/snapshot";
+import type { GardenSceneSnapshot, ScenePlot, Vec3 } from "../../scene/snapshot";
 import type { DprTier, GardenRenderer, RendererMetrics } from "../contract";
+import { canvasProjection, footprint, type CanvasProjection, type GroundPoint, type Point } from "./canvas-projection";
+import { cropArt, paintCrop } from "./cartoon-crops";
 
-interface Point {
-  readonly x: number;
-  readonly y: number;
-}
-
-interface Hit {
-  readonly index: number;
-  readonly x: number;
-  readonly y: number;
-  readonly radius: number;
-}
-
-interface GrassSeed {
-  readonly x: number;
-  readonly z: number;
-  readonly height: number;
-  readonly phase: number;
-  readonly flower: number;
-}
+const GROUND = -.35;
+const SOIL_TOP = .03;
+interface Hit { readonly index: number; readonly paths: readonly Path2D[]; readonly x: number; readonly y: number; readonly scale: number }
+interface GrassSeed { readonly x: number; readonly z: number; readonly height: number; readonly phase: number }
+interface PaintItem { readonly depth: number; readonly draw: () => void }
 
 export class Canvas2DRenderer implements GardenRenderer {
   readonly kind = "canvas2d" as const;
-
   readonly #canvas: HTMLCanvasElement;
   readonly #context: CanvasRenderingContext2D;
   readonly #maxDpr: DprTier;
-  readonly #grass = createGrassSeeds(112);
+  readonly #grass = createGrassSeeds(64);
+  readonly #stones = createStonePositions();
   #snapshot: GardenSceneSnapshot | undefined;
   #width = 1;
   #height = 1;
   #dpr = 1;
   #hits: Hit[] = [];
+  #instances = 0;
   #disposed = false;
 
   constructor(canvas: HTMLCanvasElement, maxDpr: DprTier) {
     const context = canvas.getContext("2d");
     if (!context) throw new Error("Canvas 2D is unavailable.");
-    this.#canvas = canvas;
-    this.#context = context;
-    this.#maxDpr = maxDpr;
+    this.#canvas = canvas; this.#context = context; this.#maxDpr = maxDpr;
     this.resize();
   }
 
   setSnapshot(snapshot: GardenSceneSnapshot): void {
     this.#snapshot = snapshot;
+    this.#hits = [];
   }
 
   resize(): void {
@@ -55,409 +42,264 @@ export class Canvas2DRenderer implements GardenRenderer {
     this.#width = Math.max(1, rect.width || this.#canvas.clientWidth || 1);
     this.#height = Math.max(1, rect.height || this.#canvas.clientHeight || 1);
     this.#dpr = Math.min(window.devicePixelRatio || 1, this.#maxDpr);
-    const width = Math.round(this.#width * this.#dpr);
-    const height = Math.round(this.#height * this.#dpr);
+    const width = Math.round(this.#width * this.#dpr), height = Math.round(this.#height * this.#dpr);
     if (this.#canvas.width !== width || this.#canvas.height !== height) {
-      this.#canvas.width = width;
-      this.#canvas.height = height;
+      this.#canvas.width = width; this.#canvas.height = height;
     }
     this.#context.setTransform(this.#dpr, 0, 0, this.#dpr, 0, 0);
+    this.#hits = [];
   }
 
   render(timeMs: number): void {
-    if (this.#disposed || !this.#snapshot) return;
-    this.#draw(timeMs * 0.001, this.#snapshot);
+    if (!this.#disposed && this.#snapshot) this.#draw(timeMs * .001, this.#snapshot);
   }
 
   pickPlot(x: number, y: number): number | null {
-    let closest: Hit | undefined;
-    let distance = Number.POSITIVE_INFINITY;
-    for (const hit of this.#hits) {
-      const next = Math.hypot(x - hit.x, y - hit.y);
-      if (next < hit.radius && next < distance) {
-        closest = hit;
-        distance = next;
+    if (this.#disposed || !Number.isFinite(x + y) || x < 0 || y < 0 || x > this.#width || y > this.#height) return null;
+    const ctx = this.#context;
+    ctx.save();
+    // Hit paths use CSS/local coordinates. Do not accidentally apply DPR twice.
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    try {
+      for (let i = this.#hits.length - 1; i >= 0; i -= 1) {
+        const hit = this.#hits[i]!;
+        if (hit.paths.some(path => ctx.isPointInPath(path, (x - hit.x) / hit.scale, (y - hit.y) / hit.scale))) return hit.index;
       }
-    }
-    return closest?.index ?? null;
+    } finally { ctx.restore(); }
+    return null;
   }
 
   metrics(): RendererMetrics {
-    return {
-      kind: this.kind,
-      passes: 1,
-      drawCalls: 1,
-      instances: this.#grass.length,
-      resources: 1,
-      dpr: this.#dpr,
-    };
+    return { kind: this.kind, passes: 1, drawCalls: 1, instances: this.#instances, resources: 1, dpr: this.#dpr };
   }
 
-  dispose(): void {
-    this.#disposed = true;
-    this.#hits = [];
-  }
+  dispose(): void { this.#disposed = true; this.#hits = []; this.#snapshot = undefined; }
 
   #draw(time: number, snapshot: GardenSceneSnapshot): void {
-    const ctx = this.#context;
-    const weather = snapshot.weather;
+    const ctx = this.#context, view = canvasProjection(this.#width, this.#height, snapshot.camera);
     this.#hits = [];
     ctx.clearRect(0, 0, this.#width, this.#height);
+    ctx.lineCap = "round"; ctx.lineJoin = "round";
+    const sky = ctx.createLinearGradient(0, 0, 0, this.#height);
+    sky.addColorStop(0, rgb(snapshot.weather.skyTop));
+    sky.addColorStop(1, rgb(snapshot.weather.skyHorizon));
+    ctx.fillStyle = sky; ctx.fillRect(0, 0, this.#width, this.#height);
+    this.#clouds(time, snapshot.weather.cloudiness);
 
-    const sky = ctx.createLinearGradient(0, 0, 0, this.#height * 0.67);
-    sky.addColorStop(0, rgb(weather.skyTop));
-    sky.addColorStop(1, rgb(weather.skyHorizon));
-    ctx.fillStyle = sky;
-    ctx.fillRect(0, 0, this.#width, this.#height);
-    this.#drawClouds(ctx, time, weather.cloudiness);
-
-    const ground = [
-      this.#project(-5.6, -4.3, -0.44, snapshot),
-      this.#project(5.6, -4.3, -0.44, snapshot),
-      this.#project(5.6, 4.3, -0.44, snapshot),
-      this.#project(-5.6, 4.3, -0.44, snapshot),
-    ];
-    this.#polygon(ground, "#7d9c55", "rgba(55,76,40,.38)");
-
-    this.#drawCloudShadow(ctx, time, weather.cloudiness, snapshot);
-    this.#drawBackFence(ctx, snapshot);
-    this.#drawStones(ctx, snapshot);
-    this.#drawGrass(ctx, time, snapshot);
-
-    const sortedPlots = [...snapshot.plots].sort(
-      (a, b) =>
-        this.#project(a.position[0], a.position[2], a.position[1], snapshot).y -
-        this.#project(b.position[0], b.position[2], b.position[1], snapshot).y,
-    );
-    for (const plot of sortedPlots) this.#drawSoilPlot(ctx, plot.index, plot.position, plot.wetness, snapshot);
-    for (const plot of sortedPlots) this.#drawLegacyCrop(ctx, plot.index, plot.position, plot, snapshot);
-
-    this.#drawFrontFence(ctx, snapshot);
-    if (weather.rain > 0) this.#drawRain(ctx, time, weather.rain);
-  }
-
-  #drawClouds(ctx: CanvasRenderingContext2D, time: number, cloudiness: number): void {
-    if (cloudiness < 0.05) return;
-    ctx.save();
-    ctx.globalAlpha = 0.12 + cloudiness * 0.22;
-    ctx.fillStyle = "#f8fbf4";
-    const drift = (time * 8) % (this.#width + 260);
-    for (let index = 0; index < 4; index += 1) {
-      const x = ((index * 310 + drift) % (this.#width + 260)) - 130;
-      const y = 62 + (index % 2) * 54;
-      ctx.beginPath();
-      ctx.ellipse(x, y, 78, 21, 0, 0, Math.PI * 2);
-      ctx.ellipse(x + 49, y + 3, 58, 16, 0, 0, Math.PI * 2);
-      ctx.ellipse(x - 44, y + 7, 48, 15, 0, 0, Math.PI * 2);
-      ctx.fill();
+    const island = footprint(0, 0, 5.05, 3.85, .48);
+    this.#solid(view, island, -.76, GROUND, "#a1b974", "#77934f", "#647d48", "#648049");
+    // Broad meadow patches live on the ground plane; no floating screen ellipse.
+    this.#groundOval(view, -.8, .4, 3.9, 2.6, GROUND + .005, "rgba(203,215,143,.36)");
+    if (snapshot.weather.cloudiness > .1) {
+      this.#groundOval(view, Math.sin(time * .07) * 2, Math.cos(time * .06), 2.5, 1.2,
+        GROUND + .006, `rgba(62,84,59,${snapshot.weather.cloudiness * .085})`);
     }
-    ctx.restore();
+
+    // One view-depth queue for all grounded objects. Never assign permanent
+    // 'front fence' roles to world edges; those roles reverse on rotation.
+    const items: PaintItem[] = [];
+    const enqueue = (x: number, z: number, draw: () => void) => items.push({ depth: view.depth(x, z), draw });
+    this.#stones.forEach(([x, , z], index) => enqueue(x, z, () => {
+      const radius = .16 + hash(index * 11 + 2) * .08;
+      const points = Array.from({ length: 8 }, (_, i) => {
+        const angle = i / 8 * Math.PI * 2 + hash(index + 9) * .5;
+        return { x: x + Math.cos(angle) * radius, z: z + Math.sin(angle) * radius * .76 };
+      });
+      this.#solid(view, points, GROUND, GROUND + .07, "#d8cfae", "#aea486", "#a0957b", "#89846a");
+    }));
+    this.#grass.forEach(blade => enqueue(blade.x, blade.z, () => this.#grassClump(view, blade, time, snapshot.weather.wind)));
+    this.#fence(view, enqueue);
+    snapshot.plots.forEach(plot => enqueue(plot.position[0], plot.position[2], () => this.#plot(view, plot)));
+    items.sort((a, b) => a.depth - b.depth);
+    for (const item of items) item.draw();
+    this.#instances = items.length;
+    if (snapshot.weather.rain > 0) this.#rain(time, snapshot.weather.rain);
   }
 
-  #drawCloudShadow(
-    ctx: CanvasRenderingContext2D,
-    time: number,
-    cloudiness: number,
-    snapshot: GardenSceneSnapshot,
-  ): void {
-    if (cloudiness < 0.08) return;
-    const center = this.#project(Math.sin(time * 0.08) * 2.8, Math.cos(time * 0.07) * 2.2, -0.35, snapshot);
-    ctx.save();
-    ctx.globalAlpha = cloudiness * 0.15;
-    ctx.fillStyle = "#31483c";
-    ctx.beginPath();
-    ctx.ellipse(center.x, center.y, this.#width * 0.24, this.#height * 0.08, -0.16, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-  }
-
-  #drawStones(ctx: CanvasRenderingContext2D, snapshot: GardenSceneSnapshot): void {
-    const stones = createStonePositions();
-    for (const [index, stone] of stones.entries()) {
-      const center = this.#project(stone[0], stone[2], -0.31, snapshot);
-      const scale = 0.76 + hash(index * 13 + 7) * 0.3;
-      const radiusX = Math.max(5, 18 * scale * snapshot.camera.zoom);
-      const radiusY = Math.max(3, 7 * scale * snapshot.camera.zoom);
-      ctx.save();
-      ctx.translate(center.x, center.y);
-      ctx.rotate((hash(index * 17 + 3) - 0.5) * 0.45);
-      ctx.fillStyle = index % 3 === 0 ? "#c7b99b" : index % 3 === 1 ? "#b3aa91" : "#d0c3a6";
-      ctx.strokeStyle = "rgba(74,73,60,.23)";
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.ellipse(0, 0, radiusX, radiusY, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-      ctx.restore();
+  #plot(view: CanvasProjection, plot: ScenePlot): void {
+    const [x, , z] = plot.position;
+    const wet = Math.max(0, Math.min(1, plot.wetness));
+    const soil = footprint(x, z, .62, .62, .075);
+    this.#groundOval(view, x + .045, z + .06, .77, .69, GROUND, "rgba(58,65,38,.16)");
+    const bedFaces: Path2D[] = [];
+    const surface = this.#solid(view, soil, GROUND, SOIL_TOP,
+      blend("#ba8758", "#79553e", wet), blend("#97623f", "#5c402f", wet),
+      blend("#a97148", "#664833", wet), "#695039", bedFaces);
+    const ctx = this.#context;
+    ctx.save(); ctx.clip(surface);
+    // Wide, filled soil bands: a world-aligned cue, not a fine ruled grid.
+    for (const offset of [-.36, 0, .36]) {
+      const band = footprint(x, z + offset, .51, .065, .045);
+      this.#polygon(band.map(p => view.point(p.x, p.z, SOIL_TOP)), blend("#a77448", "#674631", wet));
     }
+    if (view.scale >= 34) for (let grain = 0; grain < 7; grain += 1) {
+      const gx = x + (hash(plot.index * 71 + grain * 13) - .5) * .9;
+      const gz = z + (hash(plot.index * 43 + grain * 19) - .5) * .94;
+      this.#groundOval(view, gx, gz, .04 + hash(grain + 7) * .018, .032, SOIL_TOP + .002,
+        grain % 2 ? "rgba(232,181,115,.38)" : "rgba(71,48,31,.25)");
+    }
+    if (wet > 0) this.#groundOval(view, x - .18, z + .34, .25, .08, SOIL_TOP + .003, `rgba(190,200,161,${wet * .19})`);
+    ctx.restore();
+    this.#hits.push({ index: plot.index, paths: bedFaces, x: 0, y: 0, scale: 1 });
+    if (!plot.crop || plot.harvested || plot.stage < 1) return;
+    const root = view.point(x, z, SOIL_TOP);
+    this.#groundOval(view, x + .055, z + .025, .37, .24, SOIL_TOP + .004, "rgba(49,59,31,.23)");
+    const art = cropArt(plot.crop, plot.stage);
+    paintCrop(ctx, art, root.x, root.y, view.scale);
+    this.#hits.push({ index: plot.index, paths: art.hit, x: root.x, y: root.y, scale: view.scale });
+    if (plot.pest) this.#badge(root, view.scale, plot.index, "pest");
+    else if (plot.stage >= 4) this.#badge(root, view.scale, plot.index, "ripe");
   }
 
-  #drawGrass(
-    ctx: CanvasRenderingContext2D,
-    time: number,
-    snapshot: GardenSceneSnapshot,
-  ): void {
-    const wind = snapshot.weather.wind;
-    const sorted = [...this.#grass].sort(
-      (a, b) => this.#project(a.x, a.z, -0.27, snapshot).y - this.#project(b.x, b.z, -0.27, snapshot).y,
-    );
-    for (const blade of sorted) {
-      const root = this.#project(blade.x, blade.z, -0.28, snapshot);
-      const height = blade.height * Math.min(this.#width / 780, this.#height / 620) * 44 * snapshot.camera.zoom;
-      const sway = Math.sin(time * (1.4 + blade.phase * 0.7) + blade.phase * 6.3 + blade.x * 0.8) * wind * 5;
-      ctx.strokeStyle = blade.flower > 0.88 ? "#557b43" : blade.flower > 0.52 ? "#688b4f" : "#456f3d";
-      ctx.lineWidth = Math.max(1, 1.4 * snapshot.camera.zoom);
-      ctx.beginPath();
-      ctx.moveTo(root.x, root.y);
-      ctx.quadraticCurveTo(root.x + sway * 0.35, root.y - height * 0.55, root.x + sway, root.y - height);
-      ctx.stroke();
-      if (blade.flower > 0.93) {
-        ctx.fillStyle = blade.phase > 0.5 ? "#f5d76c" : "#f0b5c2";
-        ctx.beginPath();
-        ctx.arc(root.x + sway, root.y - height, Math.max(2, 2.6 * snapshot.camera.zoom), 0, Math.PI * 2);
-        ctx.fill();
+  #badge(root: Point, scale: number, index: number, kind: "pest" | "ripe"): void {
+    const ctx = this.#context;
+    const radius = Math.max(6.5, scale * .105);
+    const x = root.x + scale * .45, y = root.y - scale * .13;
+    const hit = new Path2D(); hit.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.fillStyle = kind === "pest" ? "#ffedba" : "#e7b945"; ctx.fill(hit);
+    ctx.strokeStyle = "#79603a"; ctx.lineWidth = 2; ctx.stroke(hit);
+    if (kind === "pest") {
+      ctx.fillStyle = "#567947";
+      for (const part of [-.36, 0, .36]) {
+        ctx.beginPath(); ctx.arc(x + radius * part, y, radius * .34, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.fillStyle = "#fff5d7"; ctx.beginPath(); ctx.arc(x + radius * .46, y - radius * .13, radius * .12, 0, Math.PI * 2); ctx.fill();
+    } else {
+      const star = new Path2D();
+      for (let i = 0; i < 8; i += 1) {
+        const angle = i * Math.PI / 4, r = radius * (i % 2 ? .23 : .68);
+        const px = x + Math.cos(angle) * r, py = y + Math.sin(angle) * r;
+        if (i) star.lineTo(px, py); else star.moveTo(px, py);
+      }
+      star.closePath(); ctx.fillStyle = "#fff3bd"; ctx.fill(star);
+    }
+    this.#hits.push({ index, paths: [hit], x: 0, y: 0, scale: 1 });
+  }
+
+  #fence(view: CanvasProjection, enqueue: (x: number, z: number, draw: () => void) => void): void {
+    const sides = [
+      [-4.8, -3.55, 4.8, -3.55, 8], [4.8, -3.55, 4.8, 3.55, 6],
+      [4.8, 3.55, -4.8, 3.55, 8], [-4.8, 3.55, -4.8, -3.55, 6],
+    ] as const;
+    for (const [ax, az, bx, bz, count] of sides) {
+      for (let i = 0; i < count; i += 1) {
+        const x = ax + (bx - ax) * i / count, z = az + (bz - az) * i / count;
+        enqueue(x, z, () => this.#solid(view, footprint(x, z, .09, .09, .02), GROUND, GROUND + .88,
+          "#e5c88b", "#ad8050", "#bd945f", "#725d3e"));
+        const nx = ax + (bx - ax) * (i + 1) / count, nz = az + (bz - az) * (i + 1) / count;
+        const mx = (x + nx) * .5, mz = (z + nz) * .5;
+        enqueue(mx, mz, () => {
+          const rail = footprint(mx, mz, Math.abs(nx - x) * .5 + .025, Math.abs(nz - z) * .5 + .025);
+          for (const h of [.3, .62]) this.#solid(view, rail, GROUND + h, GROUND + h + .11,
+            "#d8b676", "#b18a55", "#c29b61", "#826940");
+        });
       }
     }
   }
 
-  #drawSoilPlot(
-    ctx: CanvasRenderingContext2D,
-    index: number,
-    position: Vec3,
-    wetness: number,
-    snapshot: GardenSceneSnapshot,
-  ): void {
-    const [x, , z] = position;
-    const halfX = 0.62;
-    const halfZ = 0.62;
-    const top = [
-      this.#project(x - halfX, z - halfZ, 0.03, snapshot),
-      this.#project(x + halfX, z - halfZ, 0.03, snapshot),
-      this.#project(x + halfX, z + halfZ, 0.03, snapshot),
-      this.#project(x - halfX, z + halfZ, 0.03, snapshot),
-    ];
-    const lower = [
-      this.#project(x - halfX, z - halfZ, -0.18, snapshot),
-      this.#project(x + halfX, z - halfZ, -0.18, snapshot),
-      this.#project(x + halfX, z + halfZ, -0.18, snapshot),
-      this.#project(x - halfX, z + halfZ, -0.18, snapshot),
-    ];
-    this.#polygon([top[1]!, top[2]!, lower[2]!, lower[1]!], wetness ? "#4c372a" : "#684a34");
-    this.#polygon([top[2]!, top[3]!, lower[3]!, lower[2]!], wetness ? "#493429" : "#5e432f");
-    this.#polygon(top, wetness ? "#58402f" : "#866043", "rgba(255,246,224,.28)");
-
-    ctx.save();
-    const path = new Path2D();
-    path.moveTo(top[0]!.x, top[0]!.y);
-    for (let point = 1; point < top.length; point += 1) path.lineTo(top[point]!.x, top[point]!.y);
-    path.closePath();
-    ctx.clip(path);
-    ctx.globalAlpha = wetness ? 0.24 : 0.19;
-    for (let grain = 0; grain < 18; grain += 1) {
-      const u = hash(index * 101 + grain * 7 + 3);
-      const v = hash(index * 131 + grain * 11 + 9);
-      const a = mixPoint(top[0]!, top[1]!, u);
-      const b = mixPoint(top[3]!, top[2]!, u);
-      const point = mixPoint(a, b, v);
-      ctx.fillStyle = grain % 3 === 0 ? "#d4a276" : "#3d2d25";
-      ctx.beginPath();
-      ctx.arc(point.x, point.y, 0.8 + hash(grain + index * 19) * 1.2, 0, Math.PI * 2);
-      ctx.fill();
+  #solid(view: CanvasProjection, points: readonly GroundPoint[], bottom: number, top: number,
+    topFill: string, sideA: string, sideB: string, outline: string, hitFaces?: Path2D[]): Path2D {
+    const upper = points.map(p => view.point(p.x, p.z, top));
+    const lower = points.map(p => view.point(p.x, p.z, bottom));
+    const faces = points.map((a, i) => ({ a, b: points[(i + 1) % points.length]!, i }))
+      .filter(({ a, b }) => view.facesViewer(a, b))
+      .sort((a, b) => view.depth(a.a.x + a.b.x, a.a.z + a.b.z) - view.depth(b.a.x + b.b.x, b.a.z + b.b.z));
+    for (const { a, b, i } of faces) {
+      const n = (i + 1) % points.length;
+      const face = this.#polygon([upper[i]!, upper[n]!, lower[n]!, lower[i]!], Math.abs(b.x - a.x) > Math.abs(b.z - a.z) ? sideA : sideB, outline);
+      hitFaces?.push(face);
     }
-    ctx.globalAlpha = 0.16;
-    ctx.strokeStyle = wetness ? "#1f2520" : "#39291f";
-    ctx.lineWidth = Math.max(1, snapshot.camera.zoom);
-    for (const offset of [0.27, 0.5, 0.73]) {
-      const left = mixPoint(top[0]!, top[3]!, offset);
-      const right = mixPoint(top[1]!, top[2]!, offset);
-      ctx.beginPath();
-      ctx.moveTo(left.x, left.y);
-      ctx.quadraticCurveTo((left.x + right.x) * 0.5, (left.y + right.y) * 0.5 + 2, right.x, right.y);
-      ctx.stroke();
-    }
-    ctx.restore();
-
-    const center = this.#project(x, z, 0.14, snapshot);
-    this.#hits.push({
-      index,
-      x: center.x,
-      y: center.y,
-      radius: Math.max(25, 38 * snapshot.camera.zoom),
-    });
+    const surface = this.#polygon(upper, topFill, outline);
+    hitFaces?.push(surface);
+    return surface;
   }
 
-  #drawLegacyCrop(
-    ctx: CanvasRenderingContext2D,
-    _index: number,
-    position: Vec3,
-    plot: GardenSceneSnapshot["plots"][number],
-    snapshot: GardenSceneSnapshot,
-  ): void {
-    if (!plot.crop || plot.harvested) return;
-    const stage = Math.max(1, plot.stage);
-    const center = this.#project(position[0], position[2], 0.52 + stage * 0.12, snapshot);
-    const size = (18 + stage * 6) * snapshot.camera.zoom;
-    ctx.save();
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.font = `${size}px system-ui`;
-    ctx.shadowColor = "rgba(33,48,32,.2)";
-    ctx.shadowBlur = 4;
-    ctx.fillText(stage < 3 ? "🌱" : CROPS[plot.crop][1], center.x, center.y);
-    ctx.shadowBlur = 0;
-    if (plot.pest) {
-      ctx.font = `${18 * snapshot.camera.zoom}px system-ui`;
-      ctx.fillText("🐛", center.x + size * 0.55, center.y - size * 0.45);
+  #groundOval(view: CanvasProjection, x: number, z: number, rx: number, rz: number, y: number, fill: string): void {
+    this.#polygon(Array.from({ length: 16 }, (_, i) => {
+      const angle = i / 16 * Math.PI * 2;
+      return view.point(x + Math.cos(angle) * rx, z + Math.sin(angle) * rz, y);
+    }), fill);
+  }
+
+  #grassClump(view: CanvasProjection, blade: GrassSeed, time: number, wind: number): void {
+    const ctx = this.#context, root = view.point(blade.x, blade.z, GROUND);
+    const height = blade.height * view.scale;
+    const sway = Math.sin(time * 1.7 + blade.phase * 6.3) * wind * view.scale * .055;
+    for (const direction of [-1, 0, 1]) {
+      const tipX = root.x + direction * height * .43 + sway, tipY = root.y - height * (direction ? .7 : 1);
+      const width = height * .21;
+      ctx.beginPath(); ctx.moveTo(root.x - width * .4, root.y);
+      ctx.quadraticCurveTo(root.x - width + direction * height * .2, root.y - height * .6, tipX, tipY);
+      ctx.quadraticCurveTo(root.x + width + direction * height * .2, root.y - height * .4, root.x + width * .4, root.y);
+      ctx.closePath(); ctx.fillStyle = direction < 0 ? "#5a8146" : direction ? "#72994e" : "#88ab58"; ctx.fill();
     }
-    if (stage >= 4) {
-      ctx.font = `${16 * snapshot.camera.zoom}px system-ui`;
-      ctx.fillText("✨", center.x - size * 0.55, center.y - size * 0.48);
+    if (blade.phase > .86) {
+      const tip = { x: root.x + sway, y: root.y - height };
+      ctx.fillStyle = blade.phase > .94 ? "#efc167" : "#e9adad";
+      const r = Math.max(2.2, view.scale * .045);
+      for (const [dx,dy] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+        ctx.beginPath(); ctx.arc(tip.x + dx! * r, tip.y + dy! * r, r, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.fillStyle = "#fff0bf"; ctx.beginPath(); ctx.arc(tip.x, tip.y, r * .7, 0, Math.PI * 2); ctx.fill();
     }
-    ctx.restore();
   }
 
-  #drawBackFence(ctx: CanvasRenderingContext2D, snapshot: GardenSceneSnapshot): void {
-    this.#drawFenceSide(ctx, [-4.8, -3.55], [4.8, -3.55], snapshot);
-    this.#drawFenceSide(ctx, [4.8, -3.55], [4.8, 3.55], snapshot);
-  }
-
-  #drawFrontFence(ctx: CanvasRenderingContext2D, snapshot: GardenSceneSnapshot): void {
-    this.#drawFenceSide(ctx, [-4.8, 3.55], [4.8, 3.55], snapshot, true);
-    this.#drawFenceSide(ctx, [-4.8, -3.55], [-4.8, 3.55], snapshot, true);
-  }
-
-  #drawFenceSide(
-    ctx: CanvasRenderingContext2D,
-    start: readonly [number, number],
-    end: readonly [number, number],
-    snapshot: GardenSceneSnapshot,
-    front = false,
-  ): void {
-    const posts = Math.abs(end[0] - start[0]) > Math.abs(end[1] - start[1]) ? 8 : 6;
-    const railAStart = this.#project(start[0], start[1], 0.32, snapshot);
-    const railAEnd = this.#project(end[0], end[1], 0.32, snapshot);
-    const railBStart = this.#project(start[0], start[1], 0.72, snapshot);
-    const railBEnd = this.#project(end[0], end[1], 0.72, snapshot);
-    ctx.save();
-    ctx.lineCap = "round";
-    ctx.strokeStyle = front ? "#795431" : "#6d4e31";
-    ctx.lineWidth = Math.max(3, 5 * snapshot.camera.zoom);
-    for (const [a, b] of [[railAStart, railAEnd], [railBStart, railBEnd]] as const) {
-      ctx.beginPath();
-      ctx.moveTo(a.x, a.y);
-      ctx.lineTo(b.x, b.y);
-      ctx.stroke();
-    }
-    for (let index = 0; index <= posts; index += 1) {
-      const t = index / posts;
-      const x = start[0] + (end[0] - start[0]) * t;
-      const z = start[1] + (end[1] - start[1]) * t;
-      const root = this.#project(x, z, -0.33, snapshot);
-      const top = this.#project(x, z, 0.95, snapshot);
-      ctx.lineWidth = Math.max(4, 7 * snapshot.camera.zoom);
-      ctx.beginPath();
-      ctx.moveTo(root.x, root.y);
-      ctx.lineTo(top.x, top.y);
-      ctx.stroke();
-    }
-    ctx.restore();
-  }
-
-  #drawRain(ctx: CanvasRenderingContext2D, time: number, rain: number): void {
-    ctx.save();
-    ctx.strokeStyle = `rgba(224,241,246,${0.18 + rain * 0.23})`;
-    ctx.lineWidth = 1;
-    const count = Math.round(24 + rain * 34);
-    for (let index = 0; index < count; index += 1) {
-      const x = hash(index * 31 + 9) * this.#width;
-      const cycle = (hash(index * 47 + 2) + time * (0.4 + rain * 0.35)) % 1;
-      const y = cycle * this.#height;
-      ctx.beginPath();
-      ctx.moveTo(x, y);
-      ctx.lineTo(x - 5, y + 16);
-      ctx.stroke();
-    }
-    ctx.restore();
-  }
-
-  #project(x: number, z: number, y: number, snapshot: GardenSceneSnapshot): Point {
-    const angle = snapshot.camera.angle;
-    const cosine = Math.cos(angle);
-    const sine = Math.sin(angle);
-    const rotatedX = x * cosine - z * sine;
-    const rotatedZ = x * sine + z * cosine;
-    const scale = Math.min(this.#width / 13.4, this.#height / 9.6) * snapshot.camera.zoom;
-    return {
-      x: this.#width * 0.5 + (rotatedX - rotatedZ) * scale,
-      y: this.#height * 0.59 + (rotatedX + rotatedZ) * scale * 0.42 - y * scale,
-    };
-  }
-
-  #polygon(points: readonly Point[], fill: string, stroke?: string): void {
+  #clouds(time: number, cloudiness: number): void {
     const ctx = this.#context;
-    ctx.beginPath();
-    points.forEach((point, index) => {
-      if (index === 0) ctx.moveTo(point.x, point.y);
-      else ctx.lineTo(point.x, point.y);
-    });
-    ctx.closePath();
-    ctx.fillStyle = fill;
-    ctx.fill();
-    if (stroke) {
-      ctx.strokeStyle = stroke;
-      ctx.lineWidth = 1;
-      ctx.stroke();
+    ctx.save(); ctx.globalAlpha = .32 + cloudiness * .34; ctx.fillStyle = "#f8efdb";
+    for (let i = 0; i < 4; i += 1) {
+      const x = ((i * (this.#width + 240) / 4 + time * 6) % (this.#width + 240)) - 120;
+      const y = this.#height * (.11 + (i % 2) * .075);
+      ctx.beginPath(); ctx.ellipse(x, y, 61, 15, 0, 0, Math.PI * 2);
+      ctx.ellipse(x - 21, y - 10, 29, 20, 0, 0, Math.PI * 2);
+      ctx.ellipse(x + 19, y - 8, 25, 17, 0, 0, Math.PI * 2); ctx.fill();
     }
+    ctx.restore();
+  }
+
+  #rain(time: number, rain: number): void {
+    const ctx = this.#context;
+    ctx.fillStyle = `rgba(226,241,237,${.3 + rain * .22})`;
+    for (let i = 0; i < Math.round(22 + rain * 20); i += 1) {
+      const x = hash(i * 31 + 9) * this.#width;
+      const y = ((hash(i * 47 + 2) + time * (.4 + rain * .35)) % 1) * this.#height;
+      // Filled rounded drops replace one-pixel scratches across the garden.
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.quadraticCurveTo(x + 2.4, y + 7, x - 1, y + 11);
+      ctx.quadraticCurveTo(x - 5, y + 13, x - 4, y + 8); ctx.closePath(); ctx.fill();
+    }
+  }
+
+  #polygon(points: readonly Point[], fill: string, stroke?: string): Path2D {
+    const path = new Path2D();
+    points.forEach((point, i) => { if (i) path.lineTo(point.x, point.y); else path.moveTo(point.x, point.y); });
+    path.closePath();
+    const ctx = this.#context; ctx.fillStyle = fill; ctx.fill(path);
+    if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 2; ctx.stroke(path); }
+    return path;
   }
 }
 
 function createGrassSeeds(count: number): GrassSeed[] {
-  return Array.from({ length: count }, (_, index) => {
-    const side = index % 4;
-    const along = hash(index * 17 + 1) * 2 - 1;
-    const depth = 0.25 + hash(index * 23 + 5) * 1.2;
-    const position = side === 0
-      ? { x: along * 4.6, z: -3.3 - depth * 0.45 }
-      : side === 1
-        ? { x: 3.65 + depth * 0.55, z: along * 3.1 }
-        : side === 2
-          ? { x: along * 4.6, z: 3.3 + depth * 0.45 }
-          : { x: -3.65 - depth * 0.55, z: along * 3.1 };
+  return Array.from({ length: count }, (_, i) => {
+    const along = hash(i * 17 + 1) * 2 - 1, depth = .12 + hash(i * 23 + 5) * .25;
+    const side = i % 4;
     return {
-      ...position,
-      height: 0.55 + hash(index * 29 + 7) * 0.7,
-      phase: hash(index * 37 + 11),
-      flower: hash(index * 43 + 13),
+      x: side === 0 || side === 2 ? along * 4.55 : (side === 1 ? 1 : -1) * (4.15 + depth),
+      z: side === 1 || side === 3 ? along * 3.2 : (side === 0 ? -1 : 1) * (3.1 + depth),
+      height: .22 + hash(i * 29 + 7) * .24, phase: hash(i * 37 + 11),
     };
   });
 }
-
 function createStonePositions(): Vec3[] {
   const positions: Vec3[] = [];
   for (let row = 0; row < 9; row += 1) {
-    const z = -2.9 + row * 0.72;
-    positions.push([-3.42, -0.28, z]);
-    positions.push([3.42, -0.28, z]);
+    const z = -2.9 + row * .72; positions.push([-3.5, GROUND, z], [3.5, GROUND, z]);
   }
-  for (let column = 0; column < 10; column += 1) {
-    const x = -3.15 + column * 0.7;
-    positions.push([x, -0.28, 2.85]);
-  }
+  for (let col = 0; col < 10; col += 1) positions.push([-3.15 + col * .7, GROUND, 2.85]);
   return positions;
 }
-
-function hash(value: number): number {
-  const sine = Math.sin(value * 12.9898 + 78.233) * 43758.5453;
-  return sine - Math.floor(sine);
-}
-
-function mixPoint(a: Point, b: Point, amount: number): Point {
-  return {
-    x: a.x + (b.x - a.x) * amount,
-    y: a.y + (b.y - a.y) * amount,
-  };
-}
-
-function rgb(color: Vec3): string {
-  return `rgb(${color.map((component) => Math.round(component * 255)).join(",")})`;
+function hash(value: number): number { const sine = Math.sin(value * 12.9898 + 78.233) * 43758.5453; return sine - Math.floor(sine); }
+function rgb(color: Vec3): string { return `rgb(${color.map(component => Math.round(component * 255)).join(",")})`; }
+function blend(a: string, b: string, amount: number): string {
+  return `rgb(${[1,3,5].map(offset => Math.round(parseInt(a.slice(offset, offset + 2), 16) * (1 - amount) + parseInt(b.slice(offset, offset + 2), 16) * amount)).join(",")})`;
 }

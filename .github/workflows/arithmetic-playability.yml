@@ -13,6 +13,7 @@ on:
       - 'package*.json'
       - 'tests/arithmetic-browser-evidence.py'
       - 'tests/arithmetic_ui_browser_support.py'
+      - 'tests/canvas-*'
       - '.github/workflows/arithmetic-playability.yml'
   push:
     branches: [main]
@@ -27,6 +28,7 @@ on:
       - 'package*.json'
       - 'tests/arithmetic-browser-evidence.py'
       - 'tests/arithmetic_ui_browser_support.py'
+      - 'tests/canvas-*'
       - '.github/workflows/arithmetic-playability.yml'
 
 permissions:
@@ -76,6 +78,13 @@ jobs:
           done
           curl -fsS http://127.0.0.1:4175/ >/dev/null
           ARITHMETIC_URL=http://127.0.0.1:4175 /tmp/eric-arithmetic-browser/bin/python tests/arithmetic-browser-evidence.py
+      - name: Verify cartoon projection, picking and deterministic Canvas frames
+        timeout-minutes: 2
+        env:
+          ARITHMETIC_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          node --input-type=module -e "import { build } from 'esbuild'; await build({entryPoints:['tests/canvas-visual-fixture.ts'],bundle:true,format:'iife',outfile:'browser-evidence/canvas-fixture.js'});"
+          /tmp/eric-arithmetic-browser/bin/python tests/canvas-browser-evidence.py
       - name: Keep action reports and screenshots even after a failure
         if: always()
         uses: actions/upload-artifact@v4
