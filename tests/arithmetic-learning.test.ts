@@ -43,6 +43,21 @@ describe("question / action / visible mathematics use the same quantities", () =
     expect(gardenQuestion(state).source).toBe("target");
   });
 
+  test("runtime and originals match the recorded art provenance", async () => {
+    const root = new URL("../src/ui/art/arithmetic-r1/", import.meta.url);
+    const provenance = JSON.parse(readFileSync(new URL("provenance.json", root), "utf8")) as {
+      sourceSha256: Record<string, string>; runtimeSha256: string;
+    };
+    const sha256 = async (path: string): Promise<string> => {
+      const bytes = new TextEncoder().encode(readFileSync(new URL(path, root), "utf8"));
+      const digest = await crypto.subtle.digest("SHA-256", bytes);
+      return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, "0")).join("");
+    };
+    expect(Object.keys(provenance.sourceSha256)).toHaveLength(4);
+    for (const [name, hash] of Object.entries(provenance.sourceSha256)) expect(await sha256(`source/${name}`)).toBe(hash);
+    expect(await sha256("runtime.svg")).toBe(provenance.runtimeSha256);
+  });
+
   test("shipped division glyph has one bar and two dots; originals are preserved", () => {
     const sprite = readFileSync(new URL("../src/ui/art/arithmetic-r1/runtime.svg", import.meta.url), "utf8");
     const divide = sprite.match(/<symbol id="op-divide"[\s\S]*?<\/symbol>/)?.[0] ?? "";

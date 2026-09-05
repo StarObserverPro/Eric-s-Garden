@@ -1,32 +1,36 @@
 # Arithmetic art and learning-flow integration
 
-Status: executing
+Status: review candidate — final acceptance and exact-head checks are recorded in [PR #30](https://github.com/StarObserverPro/Eric-s-Garden/pull/30).
 Base main SHA: a85627a5c99be39adf84b1045cd2a1ce462e54c8
-Dependency: PR #28, head 1a936b282863ac6266ccde0f6536a617b70aaa82; this branch is stacked on agent/arithmetic-garden-r1, not an implicit merge to main.
+Dependency: PR #28, head 1a936b282863ac6266ccde0f6536a617b70aaa82. This PR is stacked on `agent/arithmetic-garden-r1`; it does not merge that branch or deploy main.
 
 ## Objective
-Integrate the supplied Arithmetic Art R1 into the playable UI, keep question operands and reference lists visible, and connect completed interactions to large, readable equations.
+Integrate the supplied Arithmetic Art R1 into the playable UI, preserve the operands and references needed to answer questions, and connect completed interactions to large, readable mathematics.
 
-## Acceptance
-- A1 — Supplied crop, operator, numeral and feedback SVG artwork appears in the real UI with fixed-size accessible containers; no Drive runtime dependency.
-- A2 — Question, necessary crop/count list and answer controls remain usable together on desktop and narrow touch screens; irrelevant overlays cannot intercept them.
-- A3 — Completed arithmetic interactions show true operation-specific equations in large text, retain the supporting quantities, and let Eric choose when to continue.
-- A4 — Close/back/reopen/reload and fresh-pointer boundaries remain safe; no resource, reward, save-schema or renderer changes.
+## Acceptance and evidence owners
+| Acceptance | Final diff / evidence |
+| --- | --- |
+| A1: Actual local art in live UI; no Drive runtime dependency | `arithmetic-art.ts`, `art/arithmetic-r1/`; original/runtime SHA-256 tests, visible SVG geometry plus owned-cell paint bounds; real question, harvest and sharing screenshots |
+| A2: Question, required counts and answer controls usable together | `arithmetic-question.ts`, `arithmetic-learning.css`, stats wiring in `main.ts`; wrong/correct/back/reopen, clipping and hit-testing at desktop, narrow touch and landscape reflow |
+| A3: True large mathematics after the interaction, references retained, manual continuation | `arithmetic-learning.ts`, completion UI; actual harvested sums, current-column comparisons/addition/subtraction, equal-sharing division and multiplication, >=30px short recaps and >=26px long sums |
+| A4: Close/back/reload/next/reset and pointer boundary remain safe | Full five-level mouse/touch browser journey, token conservation, save/reward invariance and existing fresh-pointer guard; no model/schema/renderer changes |
 
-## Non-goals
-- No merge/deployment, unrelated rendering work, new game systems, dependency upgrades or edits to Crystal Garden.
-- Original art remains in the supplied Drive folder. Runtime derivatives and provenance go to GitHub; sandbox files are temporary workbench/evidence only.
+## Scope
+- Carrier: central-bed crop orders, harvest review, equal-sharing baskets, optional statistics questions.
+- Owners: `src/ui/`, UI wiring in `src/main.ts`, focused tests, the existing read-only Arithmetic Playability workflow, art provenance and experience documentation.
+- No model, save-schema, resource/reward, renderer, camera, picking, dependency, merge or deployment changes. No Crystal Garden changes.
+- Original art remains in the supplied Drive folder. Runtime derivatives, source copies and provenance are GitHub assets; sandbox workbench/evidence are not another product source.
 
-## Scene carrier and affected owners
-- Carrier: central-bed crop orders, harvest review, equal-sharing baskets and optional statistics questions.
-- Paths: src/ui/, src/main.ts, index.html as necessary, local SVG assets, focused tests, docs/experience/.
-- Architecture boundary touched: no.
+## Current state / handoff
+- Implemented: artwork placement, explicit target/collected question sources, preserved reference workspace, persistent large equations, ordinary-flow completion footer, and bounded SVG positioning.
+- Local production build and 32 focused learning/gameplay/HUD tests pass. Local full Node-GPU tests lack an adapter; use the existing Verify workflow with its portable CPU renderer.
+- Current step: PR review gate. Keep PR #30 draft until the candidate's Verify and Arithmetic Playability checks pass **and its screenshots are visually reviewed**. PR #30 records the resulting SHA, run/artifact IDs, review outcome and limitations without a self-referential documentation-commit loop.
+- Next action after that gate: independent review. Merge/release requires separate user activation; account for the dependency on #28.
+- Tooling limitation: sandbox Chromium blocks localhost. Browser evidence runs in GitHub Actions; the temporary source-workbench workflow has been removed.
 
-## Current state
-- Completed: source-of-truth and open-PR inspection; Drive art archive fetched.
-- Current step: inspect UI/question ownership and establish exact-source browser workbench.
-- Next action: integrate assets and repair question/reference/result flow.
-- Blocker: sandbox has no GitHub DNS; use the repository-documented read-only Actions artifact roundtrip, then remove temporary source packaging before review.
+## Evidence interpretation
+Run 33935578645 / candidate 4bf846b completed both five-level action journeys, but its screenshots exposed mispositioned SVG operators/tokens. It is **not** final visual evidence. This candidate fixes the cells and adds viewport-and-painted-bounds assertions; final reviewed evidence is attached to PR #30.
 
-## Evidence
-- Pending focused math, actual desktop/touch journeys, screenshots and final-head integration check.
+The browser matrix covers mouse 1440x900; emulated touch 390x844 and 320x568; open-question reflow at 320x568, 844x390 and 1024x768. Gameplay journeys use Canvas fallback. Verify separately checks production WebGPU startup/presentation. No physical-device, Safari or full WebGPU five-level certification is claimed.
+
+Experience: `docs/experience/arithmetic-art-learning-flow-r1.md`.

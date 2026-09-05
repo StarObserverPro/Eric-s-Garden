@@ -30,6 +30,21 @@ def visible_packet(page, selector):
     })''')
 
 
+def assert_owned_art(page, selector, name, out):
+    """Non-empty SVG geometry alone misses intrinsic-size grid displacement.
+    Both the SVG viewport AND the painted use must fit their owned cell.
+    """
+    packet = page.locator(selector).evaluate_all("""els => els.map(svg => {
+      const box=r=>({x:r.x,y:r.y,w:r.width,h:r.height,right:r.right,bottom:r.bottom});
+      const owner=svg.parentElement.getBoundingClientRect(), viewport=svg.getBoundingClientRect();
+      const paint=svg.querySelector('use').getBoundingClientRect();
+      const fits=r=>r.width>0&&r.height>0&&r.x>=owner.x-1&&r.y>=owner.y-1&&r.right<=owner.right+1&&r.bottom<=owner.bottom+1;
+      return {art:svg.dataset.art,owner:box(owner),viewport:box(viewport),paint:box(paint),fits:fits(viewport)&&fits(paint)};
+    })""")
+    Path(out, name+'-art-bounds.json').write_text(json.dumps(packet,ensure_ascii=False,indent=2))
+    assert packet and all(item['fits'] for item in packet), ('art escaped its owned cell',packet)
+
+
 def assert_workspace(page, name, out, answered=False):
     selectors = '.question-source,.question-title,.question-reference,.question-return'
     selectors += ',#questionBox .math-equation' if answered else ',#questionBox .answer-btn'
@@ -45,6 +60,7 @@ def assert_workspace(page, name, out, answered=False):
     if answered:
         maths=visible_packet(page, '#questionBox .math-equation')
         assert all(x['font']>=26 for x in maths), 'result equation is still small print'
+        assert_owned_art(page, '#questionBox .math-digit svg:visible,#questionBox .math-operator svg:visible', name, out)
     art = page.locator('#questionBox svg:visible use').evaluate_all('els=>els.map(e=>({w:e.getBBox().width,h:e.getBBox().height}))')
     assert art and all(a['w']>0 and a['h']>0 for a in art), 'runtime SVG did not paint'
 
@@ -102,3 +118,4 @@ def assert_sharing_recap(page, name, out):
     assert all(x['visible'] and x['hit'] for x in packet), ('sharing references/math obscured',packet)
     assert all(x['font']>=30 for x in visible_packet(page,'.sharing-equation .math-equation'))
     assert page.locator('#nextLevelBtn').evaluate('e=>getComputedStyle(e).position')=='static'
+    assert_owned_art(page, '.sharing-token svg:visible,.sharing-equation .math-digit svg:visible,.sharing-equation .math-operator svg:visible', name, out)
